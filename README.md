@@ -1,77 +1,75 @@
-# LightLib Framework
-**LightLib** — это современный C++ MVC фреймворк, разработанный для создания высокопроизводительных асинхронных API. Фреймворк сочетает в себе мощь Boost.Asio с современными возможностями C++20/23.
-##  Особенности
+LightLib Framework
+LightLib is a modern C++ MVC framework designed for creating high-performance asynchronous APIs.
+The framework combines the power of Boost.Asio with modern C++20/23 features.
 
--   **Полная асинхронность** на основе корутин Boost.Asio
-    
--   **MVC архитектура** с четким разделением ответственности
-    
--   **Встроенная система миграций** БД
-    
--   **Поддержка JWT аутентификации**
-    
--   **Кэширование через Redis**
-    
--   **Высокая производительность** с минимальными накладными расходами
-## Требования
-### **Обязательные компоненты:**
+## Features
 
--   **PostgreSQL** 12+ (для работы с базой данных)
-    
--   **CMake** 3.15+ (система сборки)
-    
--   **vcpkg** (менеджер зависимостей C++)
-    
--   **C++ компилятор** с поддержкой C++20 (GCC 10+, Clang 10+, MSVC 2019 16.8+)
--   **Файл .env** с конфигурацией окружения
-    
--   **LightLib библиотеки** (предварительно собранные)
+- **Full asynchrony** based on Boost.Asio coroutines
+- **MVC architecture** with clear separation of concerns
+- **Built-in database migration** system
+- **JWT authentication** support
+- **Redis caching**
+- **High performance** with minimal overhead
 
-### **Поддерживаемые платформы:**
+## Requirements
 
--   **Windows** 10/11 (Visual Studio 2019/2022)
-    
--   **Linux** (Ubuntu 20.04+, CentOS 8+)
-    
--   **macOS** 11+ (Apple Clang) 	
+### **Required components:**
 
-LightLib **требует** наличие файла `.env` в корне проекта со следующими параметрами:
+- **PostgreSQL** 12+ (for database operations)
+- **CMake** 3.15+ (build system)
+- **vcpkg** (C++ dependency manager)
+- **C++ compiler** with C++20 support (GCC 10+, Clang 10+, MSVC 2019 16.8+)
+- **.env file** with environment configuration
+- **LightLib libraries** (pre-built)
+
+### **Supported platforms:**
+
+- **Windows** 10/11 (Visual Studio 2019/2022)
+- **Linux** (Ubuntu 20.04+, CentOS 8+)
+- **macOS** 11+ (Apple Clang)
+
+LightLib **requires** a `.env` file in the project root with the following parameters:
+
 ```
-# Серверные настройки
+# Server settings
 S_HOST=127.0.0.1
 S_PORT=3500
 
-# База данных PostgreSQL
+# PostgreSQL database
 DB_HOST=127.0.0.1
 DB_PORT=5432
 DB_USERNAME=your_username
 DB_PASSWORD=your_password
 DB_DATABASE=lightlib_db
 
-# Redis для кэширования и сессий
+# Redis for caching and sessions
 REDIS_HOST=127.0.0.1
 REDIS_PORT=6379
 
-# Безопасность
+# Security
 AUTH_SECRET=your_super_secret_jwt_key_here
 ```
-## Структура проекта
+
+## Project structure
+
 ```
 launchpad/
-├── .env                          # Конфигурация окружения
-├── CMakeLists.txt               # Файл сборки
-├── vcpkg.json                   # Зависимости vcpkg
+├── .env                          # Environment configuration
+├── CMakeLists.txt               # Build file
+├── vcpkg.json                   # vcpkg dependencies
 ├── Launchpad/
-│   └── Proj.cpp           # Главный файл приложения
+│   └── Proj.cpp           # Main application file
 ├── libs/
 │   └── LightLib/
-│       ├── x64-windows/        # Windows библиотеки
-│       └── x64-linux/          # Linux библиотеки
-└── include/                     # Заголовочные файлы
+│       ├── x64-windows/        # Windows libraries
+│       └── x64-linux/          # Linux libraries
+└── include/                     # Header files
 ```
 
-## Файлы конфигурации
-### CmakeLists.txt
+## Configuration files
+
+### CMakeLists.txt
+
 ```
 cmake_minimum_required(VERSION 3.14)
 project(proj VERSION 1.0.0 LANGUAGES CXX)
@@ -177,7 +175,9 @@ if(WIN32)
     )
 endif()
 ```
+
 ### vcpkg.json
+
 ```
 {
   "name": "launchpad",
@@ -202,7 +202,9 @@ endif()
   ]
 }
 ```
-## Сборка проекта 
+
+## Building the project
+
 ```
 # Windows
 .\build.bat
@@ -211,31 +213,29 @@ endif()
 sh build.sh
 ```
 
-# Система логирования LightLib
-LightLib предоставляет высокопроизводительную систему логирования с поддержкой цветного вывода, ротацией логов и обработкой сигналов. Логирование осуществляется как в файл, так и в консоль с цветовой разметкой.
-## Основные возможности
+# LightLib Logging System
 
--   **Цветное логирование** в консоль
-    
--   **Автоматическая ротация** логов
-    
--   **Потокобезопасность** с использованием мьютексов
-    
--   **Высокая производительность** с кэшированием времени
-    
--   **Обработка сигналов** для graceful shutdown
-    
--   **Логирование в файл** с буферизацией
+LightLib provides a high-performance logging system with colored output, log rotation, and signal handling.
+Logging is done both to file and console with color coding.
 
-| Уровень  | Цвет |Описание|
-| ------------- | ------------- |------------- |
-| ERROR  | 🔴 Красный  |Критические ошибки  |
-| WARNING  | 🟡 Желтый  |Предупреждения  |
-| INFO  |   🔵 Синий  |Информационные сообщения  |
-| SUCCESS  |   🟢 Зеленый  |Успешные операции  |
-| DEBUG|     |Отладочная информация  |
+## Key Features
 
-### Примеры использования
+- **Colored logging** to console
+- **Automatic log rotation**
+- **Thread safety** using mutexes
+- **High performance** with time caching
+- **Signal handling** for graceful shutdown
+- **File logging** with buffering
+
+| Level     | Color       | Description              |
+|-----------|-------------|--------------------------|
+| ERROR     | 🔴 Red       | Critical errors          |
+| WARNING   | 🟡 Yellow    | Warnings                 |
+| INFO      | 🔵 Blue      | Informational messages   |
+| SUCCESS   | 🟢 Green     | Successful operations    |
+| DEBUG     |             | Debug information        |
+
+### Usage examples
 
 ```
 Logger::log("Database connection established", "SUCCESS");
@@ -245,95 +245,109 @@ Logger::log("User " + username + " logged in", "INFO");
 Logger::log("Debugging username", "DEBUG");
 
 try {
-	
+    
 } catch (const std::exception& e) {
     Logger::log(std::string("Exception: ") + e.what(), "ERROR");
 }
 ```
-### Автоматическая ротация логов
 
-Система автоматически ротирует логи при достижении лимита строк:
+### Automatic log rotation
 
--   Текущий файл: `app.log`
-    
--   Старый файл: `app_old.log`
-    
--   Лимит по умолчанию: 10,000 строк
-### Кастомные уровни логирования
+The system automatically rotates logs when the line limit is reached:
+
+- Current file: `app.log`
+- Old file: `app_old.log`
+- Default limit: 10,000 lines
+
+### Custom log levels
 
 ```
 Logger::log("Custom business event", "BUSINESS");
 Logger::log("Performance metric", "METRIC");
 Logger::log("Security audit", "AUDIT");
 ```
-## Структура лог-файлов
+
+## Log file structure
+
 ```
 Storage/
 └── Logs/
-    ├── app.log      # Текущий лог-файл
-    └── app_old.log  # Предыдущий лог после ротации
+    ├── app.log      # Current log file
+    └── app_old.log  # Previous log after rotation
 ```
-## Формат логов
 
-### Консольный вывод (с цветами):
+## Log format
+
+### Console output (with colors):
+
 ```
 2024-01-15 14:30:25 [INFO] Application started
 2024-01-15 14:30:26 [SUCCESS] Database connected
 2024-01-15 14:30:27 [ERROR] Connection timeout
 ```
-Система логирования LightLib готова к использованию в production-средах и предоставляет все необходимые функции для эффективного мониторинга и отладки приложений.
-# Система маршрутизации LightLib
-LightLib предоставляет мощную систему маршрутизации с поддержкой асинхронных обработчиков, параметризованных путей и CORS. Система построена на основе Boost.Beast и Boost.Asio корутин.
 
-### 1. Роутер (Router)
+The LightLib logging system is ready for use in production environments and provides all necessary functions
+for effective application monitoring and debugging.
 
-Центральный класс для управления маршрутами и обработки запросов.
+# LightLib Routing System
 
-### 2. Маршрут (Route)
+LightLib provides a powerful routing system with support for asynchronous handlers, parameterized paths, and CORS.
+The system is built on Boost.Beast and Boost.Asio coroutines.
 
-Представляет отдельный endpoint с параметрами и обработчиком.
+### 1. Router
 
-### 3. Регистратор маршрутов (RouterRegisterer)
+Central class for managing routes and handling requests.
 
-Упрощает объявление маршрутов через макросы.
+### 2. Route
 
-### Регистрация маршрутов
+Represents a single endpoint with parameters and a handler.
+
+### 3. RouterRegisterer
+
+Simplifies route declaration through macros.
+
+### Route registration
+
 ```
 auto userController = std::make_shared<UserController>();
     
-// Базовые маршруты
+// Basic routes
 R(GET, "/api/users", userController, getUsers);
 R(POST, "/api/users", userController, createUser);
     
-// Параметризованные маршруты
+// Parameterized routes
 R(GET, "/api/users/:id", userController, getUserById);
 R(PUT, "/api/users/:id", userController, updateUser);
 R(DELETE_, "/api/users/:id", userController, deleteUser);
     
-// Вложенные параметры
+// Nested parameters
 R(GET, "/api/users/:userId/posts/:postId", userController, getUserPost);
     
-// CORS для API endpoints
+// CORS for API endpoints
 CORS("/api/users", userController);
 CORS("/api/users/:id", userController);
 ```
-## Типы маршрутов
 
-### Статические маршруты
+## Route types
+
+### Static routes
 
 ```
 R(GET, "/api/health", healthController, checkHealth);
 R(GET, "/api/version", infoController, getVersion);
 ```
-### Параметризованные маршруты
+
+### Parameterized routes
 
 ```
 R(GET, "/api/users/:id", userController, getUserById);
 R(GET, "/api/categories/:categoryId/products/:productId", productController, getProduct);
 ```
-## Обработка запросов
 
-### Доступ к параметрам
+## Request handling
+
+### Accessing parameters
+
 ```
 boost::asio::awaitable<void> getUserPost(const Request& req, Response& res, const Params& params) {
     auto userId = params.at("userId");
@@ -354,7 +368,7 @@ boost::asio::awaitable<void> getUserPost(const Request& req, Response& res, cons
 }
 ```
 
-### Работа с телом запроса
+### Working with request body
 
 ```
 boost::asio::awaitable<void> createUser(const Request& req, Response& res, const Params& params) {
@@ -378,13 +392,15 @@ boost::asio::awaitable<void> createUser(const Request& req, Response& res, const
     co_return;
 }
 ```
-# Контроллеры в LightLib Framework
 
-Контроллеры в LightLib - это центральные компоненты, которые обрабатывают HTTP запросы и возвращают ответы. Они реализуют бизнес-логику приложения, работают с моделями данных и формируют HTTP ответы.
+# Controllers in LightLib Framework
 
-## Архитектура контроллеров
+Controllers in LightLib are central components that handle HTTP requests and return responses.
+They implement application business logic, work with data models, and form HTTP responses.
 
-### Базовая структура
+## Controller Architecture
+
+### Base structure
 
 ```
 #include <LightLib/Core>
@@ -397,14 +413,15 @@ public:
     using Response = http::response<http::string_body>;
     using Params = std::unordered_map<std::string, std::string>;
 
-    // Асинхронные методы-обработчики
+    // Asynchronous handler methods
     boost::asio::awaitable<void> actionName(const Request& req, Response& res, const Params& params);
     
-    // CORS обработчик
+    // CORS handler
     void setCors(const Request& req, Response& res);
 };
 ```
-### **CORS обработчики**
+
+### **CORS handlers**
 
 ```
 void setCors(const Request& req, Response& res) {
@@ -415,17 +432,18 @@ void setCors(const Request& req, Response& res) {
     res.result(http::status::ok);
 }
 ```
-## Работа с запросами
 
-### Парсинг тела запроса
+## Working with requests
+
+### Parsing request body
 
 ```
 boost::asio::awaitable<void> createUser(const Request& req, Response& res, const Params& params) {
     try {
-        // Парсинг JSON
+        // Parse JSON
         auto body = nlohmann::json::parse(req.body());
         
-        // Валидация полей
+        // Validate fields
         if (!body.contains("name") || !body.contains("email")) {
             res.result(http::status::bad_request);
             res.body() = "Missing required fields";
@@ -443,14 +461,14 @@ boost::asio::awaitable<void> createUser(const Request& req, Response& res, const
 }
 ```
 
-### Работа с параметрами URL
+### Working with URL parameters
 
 ```
 boost::asio::awaitable<void> getUser(const Request& req, Response& res, const Params& params) {
-    // Получение параметров из URL (например: /users/:id)
+    // Get parameters from URL (e.g., /users/:id)
     auto userId = params.at("id");
     
-    // Использование параметра
+    // Use parameter
     auto user = co_await User::find(std::stoi(userId));
     
     if (!user) {
@@ -458,43 +476,52 @@ boost::asio::awaitable<void> getUser(const Request& req, Response& res, const Pa
         co_return;
     }
     
-    // Формирование ответа
+    // Form response
     res.result(http::status::ok);
     res.body() = user->toJson().dump();
     res.set(http::field::content_type, "application/json");
     co_return;
 }
 ```
-# Хелперы в LightLib Framework
-LightLib предоставляет набор utility-классов (хелперов) для решения распространенных задач: работа с cookies, генерация кодов, валидация данных и другие вспомогательные функции.
-## Класс `Code` - Генерация кодов
 
-### Назначение
+# Helpers in LightLib Framework
 
-Генерация случайных кодов для различных целей: верификация, одноразовые пароли, токены и т.д.
-### Методы
+LightLib provides a set of utility classes (helpers) for common tasks: working with cookies, code generation,
+data validation, and other helper functions.
 
-#### Генерация случайного кода
+## `Code` Class - Code Generation
+
+### Purpose
+
+Generate random codes for various purposes: verification, one-time passwords, tokens, etc.
+
+### Methods
+
+#### Generate random code
 
 ```
-// Случайный код из букв и цифр
+// Random code with letters and digits
 std::string code = Code::generateRandomCode(8);
 ```
-#### Генерация числового кода
+
+#### Generate numeric code
+
 ```
 std::string smsCode = Code::generateNumericCode(6);
 ```
-#### Генерация нескольких кодов
+
+#### Generate multiple codes
 
 ```
-// 5 случайных кодов по 10 символов
+// 5 random codes of 10 characters each
 auto codes = Code::generateMultipleCodes(5, 10);
 // ["Ab3kL9mN2p", "Xy8zQ1wV4r", ...]
 
 auto numericCodes = Code::generateMultipleCodes(3, 4, true);
 // ["3842", "9017", "5623"]
 ```
-### Примеры использования
+
+### Usage examples
 
 ```
 std::string verificationCode = Code::generateRandomCode(16);
@@ -502,26 +529,28 @@ std::string smsVerification = Code::generateNumericCode(6);
 
 auto backupCodes = Code::generateMultipleCodes(10, 8);
 for (const auto& code : backupCodes) {
-    // Сохранение в базу...
+    // Save to database...
 }
 ```
 
-## Класс `Cookie` - Работа с cookies
+## `Cookie` Class - Working with Cookies
 
-### Назначение
+### Purpose
 
-Упрощенная работа с HTTP cookies: парсинг запросов и установка в ответы.
+Simplified HTTP cookie handling: parsing from requests and setting in responses.
 
-### Методы
+### Methods
 
-#### Парсинг cookies из запроса
+#### Parse cookies from request
+
 ```
 auto cookies = Cookie::parseCookies("session=abc123; user=john; theme=dark");
 
 std::string sessionId = cookies["session"]; // "abc123"
 std::string userName = cookies["user"];     // "john"
 ```
-#### Установка cookies в ответ
+
+#### Set cookies in response
 
 ```
 std::map<std::string, std::string> cookies = {
@@ -536,8 +565,10 @@ std::map<std::string, std::string> multipleCookies = {
 };
 Cookie::set(response, multipleCookies);
 ```
-### Примеры использования
-Установка cookies
+
+### Usage examples
+
+Setting cookies
 
 ```
 boost::asio::awaitable<void> login(const Request& req, Response& res, const Params& params) {
@@ -552,7 +583,9 @@ boost::asio::awaitable<void> login(const Request& req, Response& res, const Para
     co_return;
 }
 ```
-Чтение cookie
+
+Reading cookies
+
 ```
 boost::asio::awaitable<bool> checkAuth(const Request& req) {
     auto cookieHeader = req.find(http::field::cookie);
@@ -566,28 +599,30 @@ boost::asio::awaitable<bool> checkAuth(const Request& req) {
     return false;
 }
 ```
-## Класс `Validator` - Валидация данных
 
-### Назначение
+## `Validator` Class - Data Validation
 
-Проверка корректности пользовательского ввода: пароли, email и другие данные.
+### Purpose
 
-### Методы
+Validate user input: passwords, email, and other data.
 
-#### Валидация пароля
+### Methods
+
+#### Password validation
+
 ```
 
 bool isValid = Validator::password("MySecure123!");
-// Требования:
-// - Длина: 8-20 символов
-// - Минимум одна цифра
-// - Минимум одна заглавная буква 
-// - Минимум один специальный символ
+// Requirements:
+// - Length: 8-20 characters
+// - At least one digit
+// - At least one uppercase letter
+// - At least one special character
 ```
 
-#### Валидация email
+#### Email validation
 
 ```
 bool isValid = Validator::email("user@example.com");
-// Стандарт RFC 5322
+// RFC 5322 standard
 ```
