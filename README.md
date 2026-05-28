@@ -1,4 +1,4 @@
-LightLib Framework
+# LightLib Framework
 LightLib is a modern C++ MVC framework designed for creating high-performance asynchronous APIs.
 The framework combines the power of Boost.Asio with modern C++20/23 features.
 
