@@ -52,11 +52,11 @@
 
 ## Getting Started
 
- 1. Fork the repository on GitVerse:
-    `https:gitverse.ru/SergeevSEVSU/lightlib`
+ 1. Fork the repository on GitHub:
+    `https://github.com/lev2p1/lightlib`
  2. Clone your fork:
     ```bash
-    git clone https:gitverse.ru/your-username/lightlib.git
+    git clone https:github.ru/your-username/lightlib.git
     cd lightlib
     ```
  3. Build the project using CMake and vcpkg:
@@ -193,10 +193,10 @@
 
  Use descriptive branch names to make your intent clear:
 
- - `bugfix/123-fix-memory-leak` — for bug fixes (123 = issue number)
- - `feature/456-add-websocket` — for new features
+ - `fix/123-fix-memory-leak` — for bug fixes (123 = issue number)
+ - `feat/456-add-websocket` — for new features
  - `docs/update-readme` — for documentation changes
- - Skip the number if no issue exists: `bugfix/fix-typo`
+ - Skip the number if no issue exists: `fix/fix-typo`
 
 ## Commit Messages
 
