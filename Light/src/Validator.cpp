@@ -17,25 +17,28 @@
  * You should have received a copy of the GNU Lesser General Public License
  * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
  */
-
 #include "../include/lightlib/App/Http/Helpers/Validator.hpp"
-
 using namespace lightlib;
 
 bool Validator::password(const std::string& password) {
-    if (password.size() < 8 || password.size() > 20) return false;
+    return passwordError(password).empty();
+}
 
+std::string Validator::passwordError(const std::string& password) {
+    if (password.size() < 8) return "Password is too short (minimum 8 characters).";
+    if (password.size() > 20) return "Password is too long (maximum 20 characters).";
     bool hasDigit = false;
     bool hasUpper = false;
     bool hasSpecial = false;
-
     for (char ch : password) {
         if (std::isdigit(ch)) hasDigit = true;
         else if (std::isupper(ch)) hasUpper = true;
         else if (!std::isalnum(ch)) hasSpecial = true;
     }
-
-    return hasDigit && hasUpper && hasSpecial;
+    if (!hasDigit) return "Password must contain at least one digit.";
+    if (!hasUpper) return "Password must contain at least one uppercase letter.";
+    if (!hasSpecial) return "Password must contain at least one special character.";
+    return "";
 }
 
 bool Validator::email(const std::string& email) {
