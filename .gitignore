@@ -378,3 +378,5 @@ MigrationBackup/
 FodyWeavers.xsd
 .vscode/settings.json
 Light/.DS_Store
+*.DS_Store
+dump.rdb
