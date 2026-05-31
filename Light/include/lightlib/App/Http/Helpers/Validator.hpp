@@ -30,6 +30,7 @@ namespace lightlib {
     public:
         static bool password(const std::string& password);
         static bool email(const std::string& email);
+        static std::string passwordError(const std::string& password);
 
     };
 }
