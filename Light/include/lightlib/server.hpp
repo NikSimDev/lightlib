@@ -31,6 +31,10 @@
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/config.hpp>
+#include <thread>
+#include <vector>
+#include <memory>
+#include <atomic>
 #include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
 #include "Database/Cache.hpp"
@@ -54,11 +58,18 @@ namespace lightlib {
         tcp::acceptor acceptor_;
         unsigned short port_;
         std::string host_;
+        std::vector<std::thread> threads_;
+        std::unique_ptr<net::executor_work_guard<net::io_context::executor_type>> work_guard_;
+
+        std::atomic<int> connection_count_{ 0 };
+        std::atomic<int> total_requests_{ 0 };
 
     public:
         Server(const std::string& host, unsigned short port)
             : acceptor_(io_, tcp::endpoint(net::ip::make_address(host), port))
             , port_(port), host_(host) {
+            acceptor_.set_option(tcp::acceptor::reuse_address(true));
+            work_guard_ = std::make_unique<net::executor_work_guard<net::io_context::executor_type>>(io_.get_executor());
         }
 
         inline bool initialize() {
@@ -83,8 +94,35 @@ namespace lightlib {
 
         inline void run() {
             try {
-                net::co_spawn(io_, accept_loop(acceptor_), net::detached);
-                io_.run();
+                net::co_spawn(io_, accept_loop(), net::detached);
+
+                int threads_count = std::thread::hardware_concurrency();
+                if (threads_count == 0) threads_count = 1;
+
+                Logger::log("Starting " + std::to_string(threads_count) + " worker threads", "INFO");
+
+                for (int i = 0; i < threads_count; ++i) {
+                    threads_.emplace_back([this, i] {
+                        Logger::log("Worker thread " + std::to_string(i) + " started on core", "DEBUG");
+                        io_.run();
+                        Logger::log("Worker thread " + std::to_string(i) + " stopped", "DEBUG");
+                        });
+                }
+
+                std::thread stats_thread([this] {
+                    while (true) {
+                        std::this_thread::sleep_for(10s);
+                        Logger::log("STATS - Active connections: " + std::to_string(connection_count_.load()) +
+                            ", Total requests: " + std::to_string(total_requests_.load()), "INFO");
+                    }
+                    });
+                stats_thread.detach();
+
+                for (auto& t : threads_) {
+                    if (t.joinable()) {
+                        t.join();
+                    }
+                }
             }
             catch (const std::exception& e) {
                 Logger::log("Server run failed: " + std::string(e.what()), "ERROR");
@@ -93,6 +131,7 @@ namespace lightlib {
         }
 
         inline void stop() {
+            work_guard_.reset();
             io_.stop();
             Logger::log("Server stopped", "INFO");
         }
@@ -125,15 +164,18 @@ namespace lightlib {
             }
         }
 
-        static inline net::awaitable<void> handle_connection(tcp::socket socket) {
+        net::awaitable<void> handle_connection(tcp::socket socket) {
+            connection_count_++;
+
             try {
+                http::request<http::string_body> req;
+                http::response<http::string_body> res;
                 beast::flat_buffer buffer;
                 bool keep_alive = true;
 
-                while (keep_alive) {
-                    http::request<http::string_body> req;
-                    http::response<http::string_body> res;
+                socket.set_option(tcp::no_delay(true));
 
+                while (keep_alive) {
                     beast::error_code ec;
                     co_await http::async_read(socket, buffer, req, net::redirect_error(net::use_awaitable, ec));
 
@@ -144,10 +186,12 @@ namespace lightlib {
                         throw boost::system::system_error(ec);
                     }
 
+                    total_requests_++;
                     keep_alive = req.keep_alive();
                     res.version(req.version());
                     res.keep_alive(keep_alive);
                     res.set(http::field::connection, keep_alive ? "keep-alive" : "close");
+                    res.set(http::field::server, "lightlib");
 
                     co_await Router::handle_request(req, res);
 
@@ -173,28 +217,16 @@ namespace lightlib {
             catch (...) {
                 Logger::log("Unknown exception in connection handler", "ERROR");
             }
+
+            connection_count_--;
             co_return;
         }
 
-        static inline net::awaitable<void> accept_loop(tcp::acceptor& acceptor) {
+        net::awaitable<void> accept_loop() {
             for (;;) {
-                beast::error_code ec;
-                tcp::socket socket = co_await acceptor.async_accept(net::use_awaitable);
-                net::co_spawn(acceptor.get_executor(), handle_connection(std::move(socket)), net::detached);
+                tcp::socket socket = co_await acceptor_.async_accept(net::use_awaitable);
+                net::co_spawn(io_, handle_connection(std::move(socket)), net::detached);
             }
         }
     };
-
-    inline void initializeEnvironment() {
-        ENV::initialize();
-    }
-
-    inline std::string getEnvironmentVariable(const std::string& key) {
-        return ENV::env_variables[key];
-    }
-
-    inline bool isEnvironmentInitialized() {
-        return ENV::initialized;
-    }
-
 }
