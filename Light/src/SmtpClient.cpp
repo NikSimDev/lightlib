@@ -18,8 +18,8 @@
  * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <include/lightlib/App/Http/Helpers/SmtpClient.hpp>
-#include <include/lightlib/App/Http/Helpers/Code.hpp>
+#include "../include/lightlib/App/Http/Helpers/SmtpClient.hpp"
+#include "../include/lightlib/App/Http/Helpers/Code.hpp"
 #include <algorithm>
 
 lightlib::SmtpClient::~SmtpClient() {
