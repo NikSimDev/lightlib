@@ -25,6 +25,7 @@
 #include <boost/beast/version.hpp>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/awaitable.hpp>
+#include <boost/asio/redirect_error.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
 #include <boost/asio/use_awaitable.hpp>
@@ -101,7 +102,6 @@ namespace lightlib {
 
     private:
         inline void initializeConnections() {
-            // Redis Queue
             try {
                 Queue::connect(ENV::env_variables["REDIS_HOST"], std::stoi(ENV::env_variables["REDIS_PORT"]));
             }
@@ -109,7 +109,6 @@ namespace lightlib {
                 Logger::log("Connection to queue failed: " + std::string(e.what()), "ERROR");
             }
 
-            // Redis Cache
             try {
                 Cache::connect(ENV::env_variables["REDIS_HOST"], std::stoi(ENV::env_variables["REDIS_PORT"]));
             }
@@ -117,7 +116,6 @@ namespace lightlib {
                 Logger::log("Connection to NOSQL database failed: " + std::string(e.what()), "ERROR");
             }
 
-            // Database Migrations
             try {
                 Database db;
                 (new MigrationManager(db))->Initialize();
@@ -130,17 +128,42 @@ namespace lightlib {
         static inline net::awaitable<void> handle_connection(tcp::socket socket) {
             try {
                 beast::flat_buffer buffer;
-                http::request<http::string_body> req;
-                http::response<http::string_body> res;
+                bool keep_alive = true;
 
-                co_await http::async_read(socket, buffer, req, net::use_awaitable);
+                while (keep_alive) {
+                    http::request<http::string_body> req;
+                    http::response<http::string_body> res;
 
-                res.version(req.version());
-                res.keep_alive(req.keep_alive());
+                    beast::error_code ec;
+                    co_await http::async_read(socket, buffer, req, net::redirect_error(net::use_awaitable, ec));
 
-                co_await Router::handle_request(req, res);
+                    if (ec == http::error::end_of_stream) {
+                        break;
+                    }
+                    if (ec) {
+                        throw boost::system::system_error(ec);
+                    }
 
-                co_await http::async_write(socket, res, net::use_awaitable);
+                    keep_alive = req.keep_alive();
+                    res.version(req.version());
+                    res.keep_alive(keep_alive);
+                    res.set(http::field::connection, keep_alive ? "keep-alive" : "close");
+
+                    co_await Router::handle_request(req, res);
+
+                    if (res.body().empty() && res.count(http::field::content_length) == 0) {
+                        res.content_length(res.body().size());
+                    }
+
+                    co_await http::async_write(socket, res, net::use_awaitable);
+
+                    if (!keep_alive) {
+                        break;
+                    }
+
+                    buffer.consume(buffer.size());
+                }
+
                 beast::error_code ec;
                 socket.shutdown(tcp::socket::shutdown_send, ec);
             }
@@ -162,7 +185,6 @@ namespace lightlib {
         }
     };
 
-    // Вспомогательные функции
     inline void initializeEnvironment() {
         ENV::initialize();
     }
@@ -175,4 +197,4 @@ namespace lightlib {
         return ENV::initialized;
     }
 
-} // namespace lightlib
+}
