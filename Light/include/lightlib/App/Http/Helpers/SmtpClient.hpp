@@ -26,9 +26,9 @@
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/awaitable.hpp>
-#include <include/lightlib/vendor/Debug/Logger.hpp>
-#include <include/lightlib/vendor/Handlers/ENV.hpp>
-#include <include/lightlib/Engine.hpp>
+#include "../../../vendor/Handlers/ENV.hpp"
+#include "../../../vendor/Debug/Logger.hpp"
+#include "../../../Engine.hpp"
 
 namespace lightlib
 {
