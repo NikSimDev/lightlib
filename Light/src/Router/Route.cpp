@@ -33,16 +33,12 @@ bool Route::match(const std::string& target, Params& outParams) const {
     std::string pathOnly = target;
     size_t queryPos = target.find('?');
 
-
     if (queryPos != std::string::npos) {
         pathOnly = target.substr(0, queryPos);
     }
 
-    Logger::log(pathOnly, "DEBUG");
-
     std::smatch match;
     if (std::regex_match(pathOnly, match, pathRegex_)) {
-        Logger::log("Used pathOnly varriable", "DEBUG");
         for (size_t i = 0; i < paramNames_.size(); ++i) {
             outParams[paramNames_[i]] = match[i + 1];
         }
