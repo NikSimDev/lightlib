@@ -30,8 +30,15 @@ Route::Route(const std::string& path,
 }
 
 bool Route::match(const std::string& target, Params& outParams) const {
+    std::string pathOnly = target;
+    size_t queryPos = target.find('?');
+
+    if (queryPos != std::string::npos) {
+        pathOnly = target.substr(0, queryPos);
+    }
+
     std::smatch match;
-    if (std::regex_match(target, match, pathRegex_)) {
+    if (std::regex_match(pathOnly, match, pathRegex_)) {
         for (size_t i = 0; i < paramNames_.size(); ++i) {
             outParams[paramNames_[i]] = match[i + 1];
         }
