@@ -188,6 +188,8 @@ namespace lightlib {
 
                     total_requests_++;
                     keep_alive = req.keep_alive();
+
+                    res = {};
                     res.version(req.version());
                     res.keep_alive(keep_alive);
                     res.set(http::field::connection, keep_alive ? "keep-alive" : "close");
@@ -201,11 +203,11 @@ namespace lightlib {
 
                     co_await http::async_write(socket, res, net::use_awaitable);
 
+                    buffer.consume(buffer.size());
+
                     if (!keep_alive) {
                         break;
                     }
-
-                    buffer.consume(buffer.size());
                 }
 
                 beast::error_code ec;
