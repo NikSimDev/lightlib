@@ -30,10 +30,12 @@ namespace lightlib {
         work_guard_ = std::make_unique<net::executor_work_guard<net::io_context::executor_type>>(io_.get_executor());
 
         WebSocketRouter::instance().set_global_message_handler([](const std::string& message, std::shared_ptr<WebSocketSession> session) {
+            Logger::log("[GLOBAL] Message handler called: " + message, "DEBUG");
             session->send("Echo: " + message);
             });
 
         WebSocketRouter::instance().set_global_binary_handler([](std::vector<uint8_t>&& data, std::shared_ptr<WebSocketSession> session) {
+            Logger::log("[GLOBAL] Binary handler called, size: " + std::to_string(data.size()), "DEBUG");
             session->send("Binary received, size: " + std::to_string(data.size()));
             });
 
@@ -44,6 +46,8 @@ namespace lightlib {
         WebSocketRouter::instance().set_global_error_handler([](const std::string& error, std::shared_ptr<WebSocketSession> session) {
             Logger::log("WebSocket error [ID: " + std::string(session->get_id()) + "]: " + error, "ERROR");
             });
+
+        Logger::log("[DEBUG] WebSocketServer constructor: global handlers set", "DEBUG");
     }
 
     bool WebSocketServer::initialize() {
@@ -112,14 +116,20 @@ namespace lightlib {
     }
 
     void WebSocketServer::add_route(const std::string& path, WebSocketRoute::ConnectHandler handler) {
+        Logger::log("[DEBUG] add_route called for path: " + path, "DEBUG");
         WebSocketRouter::instance().add_route(path, std::move(handler));
     }
 
     WebSocketRoute* WebSocketServer::set_route_message_handler(const std::string& path, WebSocketSession::MessageHandler handler) {
+        Logger::log("[DEBUG] set_route_message_handler called for path: " + path, "DEBUG");
         Params dummy;
         auto* route = WebSocketRouter::instance().find_route(path, dummy);
         if (route) {
             route->set_message_handler(std::move(handler));
+            Logger::log("[DEBUG] set_route_message_handler: handler set successfully", "DEBUG");
+        }
+        else {
+            Logger::log("[DEBUG] set_route_message_handler: route NOT found for path: " + path, "ERROR");
         }
         return route;
     }
@@ -152,7 +162,7 @@ namespace lightlib {
     }
 
     std::string WebSocketServer::extract_path(const http::request<http::string_body>& req) {
-        std::string target = req.target().to_string();
+        std::string target = std::string(req.target());
         size_t query_pos = target.find('?');
         if (query_pos != std::string::npos) {
             target = target.substr(0, query_pos);
@@ -161,38 +171,47 @@ namespace lightlib {
     }
 
     net::awaitable<void> WebSocketServer::handle_websocket(tcp::socket socket) {
-        http::request<http::string_body> req;
         beast::flat_buffer buffer;
+        http::request<http::string_body> req;
 
         co_await http::async_read(socket, buffer, req, net::use_awaitable);
+        
+        std::string buffer_content(
+            static_cast<const char*>(buffer.data().data()),
+            buffer.size()
+        );
+        Logger::log("[DEBUG] Buffer content after async_read: " + buffer_content, "DEBUG");
 
         std::string path = extract_path(req);
 
+        Logger::log("[DEBUG] WebSocket handshake path: " + path, "DEBUG");
+
         auto session = std::make_shared<WebSocketSession>(std::move(socket));
+
+        session->set_initial_buffer(std::move(buffer));
 
         Params params;
         WebSocketRoute* route = WebSocketRouter::instance().find_route(path, params);
 
         if (route) {
+            Logger::log("[DEBUG] Route FOUND for path: " + path, "DEBUG");
+
             if (route->get_message_handler()) {
                 session->set_message_handler(route->get_message_handler());
+                Logger::log("[DEBUG] Set message_handler from ROUTE", "DEBUG");
             }
             else {
                 session->set_message_handler(WebSocketRouter::instance().get_global_message_handler());
+                Logger::log("[DEBUG] Set message_handler from GLOBAL", "DEBUG");
             }
 
             if (route->get_binary_handler()) {
                 session->set_binary_handler(route->get_binary_handler());
+                Logger::log("[DEBUG] Set binary_handler from ROUTE", "DEBUG");
             }
             else {
                 session->set_binary_handler(WebSocketRouter::instance().get_global_binary_handler());
-            }
-
-            if (route->get_close_handler()) {
-                session->set_close_handler(route->get_close_handler());
-            }
-            else {
-                session->set_close_handler(WebSocketRouter::instance().get_global_close_handler());
+                Logger::log("[DEBUG] Set binary_handler from GLOBAL", "DEBUG");
             }
 
             if (route->get_error_handler()) {
@@ -202,10 +221,15 @@ namespace lightlib {
                 session->set_error_handler(WebSocketRouter::instance().get_global_error_handler());
             }
 
-            session->set_close_handler([route](std::shared_ptr<WebSocketSession> s) {
-                auto close_handler = route->get_close_handler();
-                if (close_handler) {
-                    close_handler(s);
+            auto global_close = WebSocketRouter::instance().get_global_close_handler();
+            auto route_close = route->get_close_handler();
+
+            session->set_close_handler([global_close, route_close](std::shared_ptr<WebSocketSession> s) {
+                if (route_close) {
+                    route_close(s);
+                }
+                if (global_close) {
+                    global_close(s);
                 }
                 WebSocketManager::instance().remove_session(s);
                 });
@@ -213,16 +237,19 @@ namespace lightlib {
             route->on_connect(session, params);
         }
         else {
+            Logger::log("[DEBUG] Route NOT found for path: " + path, "DEBUG");
+
             session->set_message_handler(WebSocketRouter::instance().get_global_message_handler());
             session->set_binary_handler(WebSocketRouter::instance().get_global_binary_handler());
-            session->set_close_handler([route](std::shared_ptr<WebSocketSession> s) {
-                auto close_handler = WebSocketRouter::instance().get_global_close_handler();
-                if (close_handler) {
-                    close_handler(s);
+            session->set_error_handler(WebSocketRouter::instance().get_global_error_handler());
+
+            auto global_close = WebSocketRouter::instance().get_global_close_handler();
+            session->set_close_handler([global_close](std::shared_ptr<WebSocketSession> s) {
+                if (global_close) {
+                    global_close(s);
                 }
                 WebSocketManager::instance().remove_session(s);
                 });
-            session->set_error_handler(WebSocketRouter::instance().get_global_error_handler());
         }
 
         WebSocketManager::instance().add_session(session);

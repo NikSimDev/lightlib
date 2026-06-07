@@ -61,6 +61,7 @@ namespace lightlib {
                 route->set_message_handler([controller](const std::string& msg, std::shared_ptr<lightlib::WebSocketSession> session) { \
                     controller->handler(msg, session); \
                 }); \
+            } else { \
             } \
         } 
 

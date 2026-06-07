@@ -58,11 +58,15 @@ namespace lightlib {
         void set_close_handler(CloseHandler handler);
         void set_error_handler(ErrorHandler handler);
 
+        void set_initial_buffer(beast::flat_buffer buffer);
+
         const char* get_id() const;
         bool is_open() const;
 
     private:
         static uint64_t generate_session_id();
+        
+        beast::flat_buffer initial_buffer_;
 
         websocket::stream<tcp::socket> ws_;
         uint64_t session_id_;
