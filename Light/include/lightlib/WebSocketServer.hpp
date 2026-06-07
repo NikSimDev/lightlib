@@ -37,15 +37,10 @@
 #include <memory>
 #include <atomic>
 #include "vendor/Handlers/ENV.hpp"
-#include "Database/Queue.hpp"
-#include "Database/Cache.hpp"
-#include "Database/Migrations/MigrationManager.hpp"
-#include "App/Http/Services/AuthService.hpp"
-#include "Router/RouterRegisterer.hpp"
-#include "Router/Router.hpp"
-#include "Engine.hpp"
+#include "vendor/Debug/Logger.hpp"
 #include "vendor/WebSocket/WebSocketSession.hpp"
 #include "vendor/WebSocket/WebSocketManager.hpp"
+#include "Router/WSRouter.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -63,7 +58,6 @@ namespace lightlib {
         std::string host_;
         std::vector<std::thread> threads_;
         std::unique_ptr<net::executor_work_guard<net::io_context::executor_type>> work_guard_;
-
         std::atomic<int> connection_count_{ 0 };
 
     public:
@@ -72,13 +66,23 @@ namespace lightlib {
         bool initialize();
         void run();
         void stop();
+
         WebSocketManager& get_websocket_manager();
+
         void set_websocket_message_handler(WebSocketSession::MessageHandler handler);
         void set_websocket_binary_handler(WebSocketSession::BinaryHandler handler);
         void set_websocket_close_handler(WebSocketSession::CloseHandler handler);
         void set_websocket_error_handler(WebSocketSession::ErrorHandler handler);
 
+        void add_route(const std::string& path, WebSocketRoute::ConnectHandler handler);
+
+        WebSocketRoute* set_route_message_handler(const std::string& path, WebSocketSession::MessageHandler handler);
+        WebSocketRoute* set_route_binary_handler(const std::string& path, WebSocketSession::BinaryHandler handler);
+        WebSocketRoute* set_route_close_handler(const std::string& path, WebSocketSession::CloseHandler handler);
+        WebSocketRoute* set_route_error_handler(const std::string& path, WebSocketSession::ErrorHandler handler);
+
     private:
+        std::string extract_path(const http::request<http::string_body>& req);
         net::awaitable<void> handle_websocket(tcp::socket socket);
         net::awaitable<void> handle_connection(tcp::socket socket);
         net::awaitable<void> accept_loop();
