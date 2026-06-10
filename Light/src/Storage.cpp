@@ -40,10 +40,20 @@ namespace lightlib {
 
     void Storage::put(const std::string& path, const std::string& content) {
         std::string fullPath = rootPath_ + "/" + path;
+        auto parentPath = std::filesystem::path(fullPath).parent_path();
+        std::error_code ec;
+        std::filesystem::create_directories(parentPath, ec);
+
+        if (ec) {
+            throw std::runtime_error("Cannot create directories for: " + path);
+        }
+
         std::ofstream file(fullPath, std::ios::out);
+
         if (!file.is_open()) {
             throw std::runtime_error("Failed to open file for writing: " + path);
         }
+
         file << content;
     }
 
