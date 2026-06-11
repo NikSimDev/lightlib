@@ -21,6 +21,7 @@
 #pragma once 
 #include <memory>
 #include "Router.hpp"
+#include "WSRouter.hpp"
 #include <boost/asio/io_context.hpp>
 #include "types.hpp"
 
@@ -44,5 +45,80 @@ namespace lightlib {
             Router::add(OPTIONS, path, [controller](const Request& req, Response& res, const Params& params) -> boost::asio::awaitable<void> { \
                 controller->setCors(req, res); \
                 co_return; \
+            })
+
+    #define WS_R(path, controller, handler) \
+        lightlib::WebSocketRouter::instance().add_route(path, \
+            [controller](std::shared_ptr<lightlib::WebSocketSession> session, const lightlib::Params& params) { \
+                controller->handler(session, params); \
+            })
+
+    #define WS_MSG(path, controller, handler) \
+        { \
+            lightlib::Params dummy_params; \
+            auto* route = lightlib::WebSocketRouter::instance().find_route(path, dummy_params); \
+            if (route) { \
+                route->set_message_handler([controller](const std::string& msg, std::shared_ptr<lightlib::WebSocketSession> session) { \
+                    controller->handler(msg, session); \
+                }); \
+            } else { \
+            } \
+        } 
+
+    #define WS_BIN(path, controller, handler) \
+        { \
+            lightlib::Params dummy_params; \
+            auto* route = lightlib::WebSocketRouter::instance().find_route(path, dummy_params); \
+            if (route) { \
+                route->set_binary_handler([controller](std::vector<uint8_t>&& data, std::shared_ptr<lightlib::WebSocketSession> session) { \
+                    controller->handler(std::move(data), session); \
+                }); \
+            } \
+        }
+
+    #define WS_CLOSE(path, controller, handler) \
+        { \
+            lightlib::Params dummy_params; \
+            auto* route = lightlib::WebSocketRouter::instance().find_route(path, dummy_params); \
+            if (route) { \
+                route->set_close_handler([controller](std::shared_ptr<lightlib::WebSocketSession> session) { \
+                    controller->handler(session); \
+                }); \
+            } \
+        }
+
+    #define WS_ERR(path, controller, handler) \
+        { \
+            lightlib::Params dummy_params; \
+            auto* route = lightlib::WebSocketRouter::instance().find_route(path, dummy_params); \
+            if (route) { \
+                route->set_error_handler([controller](const std::string& error, std::shared_ptr<lightlib::WebSocketSession> session) { \
+                    controller->handler(error, session); \
+                }); \
+            } \
+        }
+
+    #define WS_G_MSG(controller, handler) \
+        lightlib::WebSocketRouter::instance().set_global_message_handler( \
+            [controller](const std::string& msg, std::shared_ptr<lightlib::WebSocketSession> session) { \
+                controller->handler(msg, session); \
+            })
+
+    #define WS_G_BIN(controller, handler) \
+        lightlib::WebSocketRouter::instance().set_global_binary_handler( \
+            [controller](std::vector<uint8_t>&& data, std::shared_ptr<lightlib::WebSocketSession> session) { \
+                controller->handler(std::move(data), session); \
+            })
+
+    #define WS_G_CLOSE(controller, handler) \
+        lightlib::WebSocketRouter::instance().set_global_close_handler( \
+            [controller](std::shared_ptr<lightlib::WebSocketSession> session) { \
+                controller->handler(session); \
+            })
+
+    #define WS_G_ERR(controller, handler) \
+        lightlib::WebSocketRouter::instance().set_global_error_handler( \
+            [controller](const std::string& error, std::shared_ptr<lightlib::WebSocketSession> session) { \
+                controller->handler(error, session); \
             })
 }

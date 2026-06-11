@@ -23,17 +23,17 @@
 using namespace lightlib;
 
 void RouterRegisterer::init(boost::asio::io_context& io) {
-    #define R(method, path, controller, handler) \
+#define R(method, path, controller, handler) \
             Router::add(method, path, [controller](const Request& req, Response& res, const Params& params) -> boost::asio::awaitable<void> { \
                 co_await controller->handler(req, res, params); \
             })
 
-    #define CORS(path, controller) \
+#define CORS(path, controller) \
             Router::add(OPTIONS, path, [controller](const Request& req, Response& res, const Params& params) -> boost::asio::awaitable<void> { \
                 controller->setCors(req, res); \
                 co_return; \
             })
 
-    #undef R
-    #undef CORS
+#undef R
+#undef CORS
 }
