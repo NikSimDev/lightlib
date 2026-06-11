@@ -175,43 +175,43 @@ namespace lightlib {
         http::request<http::string_body> req;
 
         co_await http::async_read(socket, buffer, req, net::use_awaitable);
-        
-        std::string buffer_content(
-            static_cast<const char*>(buffer.data().data()),
-            buffer.size()
-        );
-        Logger::log("[DEBUG] Buffer content after async_read: " + buffer_content, "DEBUG");
 
         std::string path = extract_path(req);
 
-        Logger::log("[DEBUG] WebSocket handshake path: " + path, "DEBUG");
+        if (!websocket::is_upgrade(req)) {
+            http::response<http::string_body> res{ http::status::bad_request, req.version() };
+            res.set(http::field::content_type, "text/plain");
+            res.body() = "WebSocket upgrade required";
+            res.prepare_payload();
+            co_await http::async_write(socket, res, net::use_awaitable);
+            co_return;
+        }
 
         auto session = std::make_shared<WebSocketSession>(std::move(socket));
 
-        session->set_initial_buffer(std::move(buffer));
+        beast::error_code ec;
+        session->accept_handshake(req, ec);
+        if (ec) {
+            Logger::log("WebSocket accept failed: " + ec.message(), "ERROR");
+            co_return;
+        }
 
         Params params;
         WebSocketRoute* route = WebSocketRouter::instance().find_route(path, params);
 
         if (route) {
-            Logger::log("[DEBUG] Route FOUND for path: " + path, "DEBUG");
-
             if (route->get_message_handler()) {
                 session->set_message_handler(route->get_message_handler());
-                Logger::log("[DEBUG] Set message_handler from ROUTE", "DEBUG");
             }
             else {
                 session->set_message_handler(WebSocketRouter::instance().get_global_message_handler());
-                Logger::log("[DEBUG] Set message_handler from GLOBAL", "DEBUG");
             }
 
             if (route->get_binary_handler()) {
                 session->set_binary_handler(route->get_binary_handler());
-                Logger::log("[DEBUG] Set binary_handler from ROUTE", "DEBUG");
             }
             else {
                 session->set_binary_handler(WebSocketRouter::instance().get_global_binary_handler());
-                Logger::log("[DEBUG] Set binary_handler from GLOBAL", "DEBUG");
             }
 
             if (route->get_error_handler()) {
@@ -237,8 +237,6 @@ namespace lightlib {
             route->on_connect(session, params);
         }
         else {
-            Logger::log("[DEBUG] Route NOT found for path: " + path, "DEBUG");
-
             session->set_message_handler(WebSocketRouter::instance().get_global_message_handler());
             session->set_binary_handler(WebSocketRouter::instance().get_global_binary_handler());
             session->set_error_handler(WebSocketRouter::instance().get_global_error_handler());

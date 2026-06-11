@@ -22,6 +22,7 @@
 
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
+#include <boost/beast/http.hpp> 
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/awaitable.hpp>
 #include <functional>
@@ -33,6 +34,7 @@
 namespace beast = boost::beast;
 namespace websocket = beast::websocket;
 namespace net = boost::asio;
+namespace http = beast::http;
 using tcp = net::ip::tcp;
 
 namespace lightlib {
@@ -53,20 +55,18 @@ namespace lightlib {
         void send_binary(std::vector<uint8_t> data);
         void close(websocket::close_reason reason = {});
 
+        bool accept_handshake(const http::request<http::string_body>& req, beast::error_code& ec);
+
         void set_message_handler(MessageHandler handler);
         void set_binary_handler(BinaryHandler handler);
         void set_close_handler(CloseHandler handler);
         void set_error_handler(ErrorHandler handler);
-
-        void set_initial_buffer(beast::flat_buffer buffer);
 
         const char* get_id() const;
         bool is_open() const;
 
     private:
         static uint64_t generate_session_id();
-        
-        beast::flat_buffer initial_buffer_;
 
         websocket::stream<tcp::socket> ws_;
         uint64_t session_id_;

@@ -74,20 +74,6 @@ namespace lightlib {
 
     net::awaitable<void> WebSocketSession::run() {
         try {
-            if (initial_buffer_.size() > 0) {
-                Logger::log("[DEBUG] Have initial buffer, size: " + std::to_string(initial_buffer_.size()), "DEBUG");
-                beast::error_code ec;
-                ws_.accept(initial_buffer_.data(), ec);
-                if (ec) {
-                    Logger::log("[DEBUG] Accept error: " + ec.message(), "ERROR");
-                    throw beast::system_error(ec);
-                }
-            }
-            else {
-                Logger::log("[DEBUG] No initial buffer, calling async_accept", "DEBUG");
-                co_await ws_.async_accept(net::use_awaitable);
-            }
-
             Logger::log("WebSocket connection established [ID: " + std::string(session_id_str_) + "]", "INFO");
 
             while (ws_.is_open()) {
@@ -202,8 +188,9 @@ namespace lightlib {
         return ws_.is_open();
     }
 
-    void WebSocketSession::set_initial_buffer(beast::flat_buffer buffer) {
-        initial_buffer_ = std::move(buffer);
+    bool WebSocketSession::accept_handshake(const http::request<http::string_body>& req, beast::error_code& ec) {
+        ws_.accept(req, ec);
+        return !ec;
     }
 
 }
