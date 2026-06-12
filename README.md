@@ -283,7 +283,7 @@ The system automatically rotates logs when the line limit is reached:
 
 ### Custom log levels
 
-```text
+```cpp
 Logger::log("Custom business event", "BUSINESS");
 Logger::log("Performance metric", "METRIC");
 Logger::log("Security audit", "AUDIT");
