@@ -1,3 +1,23 @@
+/*
+ * Copyright (c) 2026 Kirill Sergeev, Nikolay Sugonyako, Andrey Agarkov, Gleb Safyannikov
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of lightlib.
+ *
+ * lightlib is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * lightlib is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "../include/lightlib/server.hpp"
 
 lightlib::Server::Server(const std::string& host, unsigned short port)
@@ -13,6 +33,22 @@ bool lightlib::Server::initialize() {
         Logger::init("debug.log");
         Logger::registerSignalHandlers();
         AuthService::secret = ENV::env_variables["AUTH_SECRET"];
+
+        auto rootDriver = std::make_shared<lightlib::FileDriver>();
+        rootDriver->setRootPath("./");
+        rootDriver->initAsync();
+
+        auto localDriver = std::make_shared<lightlib::FileDriver>();
+        localDriver->setRootPath("./");
+        localDriver->initAsync();
+
+        StorageManager::getInstance().registerDriver("root", rootDriver);
+        StorageManager::getInstance().registerDriver("local", localDriver);
+        StorageManager::getInstance().setDefaultDriver("local");
+
+        ConfigManager configManager("config.json", "root");
+        configManager.load();
+        configManager.installConfig();
 
         initializeConnections();
         RouterRegisterer::init(io_);

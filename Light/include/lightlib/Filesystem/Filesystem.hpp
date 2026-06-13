@@ -21,6 +21,7 @@
 #pragma once
 
 #include "BaseDriver.hpp"
+#include "FileDriver.hpp"
 #include "StorageManager.hpp"
 #include <memory>
 #include <optional>
@@ -56,5 +57,7 @@ namespace lightlib {
         boost::asio::awaitable<void> deleteFileAsync(const std::string& path);
         boost::asio::awaitable<void> copyAsync(const std::string& source, const std::string& destination);
         boost::asio::awaitable<void> moveAsync(const std::string& source, const std::string& destination);
+
+        std::shared_ptr<BaseDriver> getDriver() const;
     };
 }

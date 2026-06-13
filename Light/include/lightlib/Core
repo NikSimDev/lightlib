@@ -8,3 +8,4 @@
 #include "Router/RouterRegisterer.hpp"
 #include "server.hpp"
 #include "WebSocketServer.hpp"
+#include "vendor/ConfigManager.hpp"
