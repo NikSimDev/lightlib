@@ -21,6 +21,8 @@
 #pragma once
 
 #include <boost/asio/io_context.hpp>
+#include <memory>
+#include "vendor/ConfigManager.hpp"
 
 namespace lightlib {
     class Engine {
@@ -33,4 +35,6 @@ namespace lightlib {
     private:
         static inline boost::asio::io_context* io_ctx_ptr_ = nullptr;
     };
+
+    inline std::shared_ptr<lightlib::ConfigManager> global_config = nullptr;
 }

@@ -110,3 +110,7 @@ boost::asio::awaitable<void> lightlib::Filesystem::copyAsync(const std::string& 
 boost::asio::awaitable<void> lightlib::Filesystem::moveAsync(const std::string& source, const std::string& destination) {
     co_await driver_->moveAsync(source, destination);
 }
+
+std::shared_ptr<lightlib::BaseDriver> lightlib::Filesystem::getDriver() const {
+	return driver_;
+}
