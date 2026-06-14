@@ -42,7 +42,9 @@ file(GLOB_RECURSE PROJECT_SOURCES
 list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
 
 add_library(lightlib_static STATIC ${PROJECT_SOURCES})
-add_library(lightlib_shared SHARED ${PROJECT_SOURCES})
+add_library(lightlib_shared SHARED ${PROJECT_SOURCES}
+        include/lightlib/vendor/Cryptography/Cryptography.hpp
+        include/lightlib/vendor/Cryptography/Rsa.cpp)
 
 set(LIBRARIES
     Boost::beast

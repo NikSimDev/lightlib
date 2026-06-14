@@ -15,6 +15,7 @@
     "boost-system",
     "boost-thread",
     "boost-variant",
+    "boost-multiprecision",
     "fmt",
     "hiredis",
     "jwt-cpp",
