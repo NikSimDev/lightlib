@@ -46,9 +46,8 @@ bool lightlib::Server::initialize() {
         StorageManager::getInstance().registerDriver("local", localDriver);
         StorageManager::getInstance().setDefaultDriver("local");
 
-        ConfigManager configManager("config.json", "root");
-        configManager.load();
-        configManager.installConfig();
+        global_config = std::make_shared<ConfigManager>("config.json", "root");
+        global_config->load();
 
         initializeConnections();
         RouterRegisterer::init(io_);

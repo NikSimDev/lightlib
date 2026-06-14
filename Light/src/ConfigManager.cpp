@@ -19,6 +19,7 @@
  */
 
 #include "../include/lightlib/vendor/ConfigManager.hpp"
+#include "../include/lightlib/Engine.hpp"
 #include <sstream>
 
 namespace lightlib {
@@ -182,10 +183,6 @@ namespace lightlib {
 
     void ConfigManager::reload() {
         load();
-    }
-
-    void ConfigManager::installConfig() {
-        ConfigManager::config = std::shared_ptr<ConfigManager>(this);
     }
 
     std::unordered_map<std::string, std::string> ConfigManager::getRawData() const {

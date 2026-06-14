@@ -72,8 +72,6 @@ namespace lightlib {
         json unflattenMap(const std::unordered_map<std::string, std::string>& map) const;
 
     public:
-        static inline std::shared_ptr<ConfigManager> config = nullptr;
-
         ConfigManager(const std::string& configFilePath = "config.json",
             std::shared_ptr<BaseDriver> driver = nullptr);
 
@@ -84,7 +82,6 @@ namespace lightlib {
 
         void load();
         void save();
-        void installConfig();
 
         template<typename T>
         T get(const std::string& key, const T& defaultValue = T{}) {
