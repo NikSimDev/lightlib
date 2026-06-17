@@ -37,14 +37,13 @@ file(GLOB_RECURSE PROJECT_SOURCES
     "src/Database/Migrations/*.cpp"
     "src/Router/*.cpp"
     "src/Filesystem/*.cpp"
+    "src/Cryptography/*.cpp"
 )
 
 list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
 
 add_library(lightlib_static STATIC ${PROJECT_SOURCES})
-add_library(lightlib_shared SHARED ${PROJECT_SOURCES}
-        include/lightlib/vendor/Cryptography/Cryptography.hpp
-        include/lightlib/vendor/Cryptography/Rsa.cpp)
+add_library(lightlib_shared SHARED ${PROJECT_SOURCES})
 
 set(LIBRARIES
     Boost::beast

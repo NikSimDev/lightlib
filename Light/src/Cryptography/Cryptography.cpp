@@ -1,5 +1,5 @@
 #include "../../include/lightlib/vendor/Cryptography/Cryptography.hpp"
-using namespace lightLib;
+using namespace lightlib;
 
 bool Cryptography::isPrime(const crypt_int &n) {
     if (n <= 1) return false;

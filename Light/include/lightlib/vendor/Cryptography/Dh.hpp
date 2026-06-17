@@ -2,7 +2,7 @@
 
 #include "Cryptography.hpp"
 
-namespace lightLib::crypto {
+namespace lightlib::crypto {
     class DiffieHellmann : public Cryptography {
         crypt_int prime;
         crypt_int generator;

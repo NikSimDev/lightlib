@@ -2,14 +2,15 @@
 
 #include <vector>
 #include <boost/multiprecision/cpp_int.hpp>
-using namespace boost::multiprecision;
 
-typedef int256_t crypt_int;
+namespace mp = boost::multiprecision;
+
+typedef mp::int256_t crypt_int;
 typedef std::vector<crypt_int> crypt_str;
 //typedef uint8_t byte;
 //typedef std::vector<byte> bytevec;
 
-namespace lightLib {
+namespace lightlib {
 
     class Cryptography {
     public:

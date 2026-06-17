@@ -1,5 +1,5 @@
 #include "../../include/lightlib/vendor/Cryptography/Dh.hpp"
-using namespace lightLib::crypto;
+using namespace lightlib::crypto;
 
 DiffieHellmann::DiffieHellmann(crypt_int prime, crypt_int generator, crypt_int private_key)
     : prime(prime), generator(generator), private_key(private_key), shared_secret(0)

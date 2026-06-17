@@ -2,7 +2,7 @@
 
 #include "Cryptography.hpp"
 
-    namespace lightLib::crypto {
+    namespace lightlib::crypto {
 
         struct privateKey {
             crypt_int s; // exponent

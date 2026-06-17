@@ -1,7 +1,7 @@
 #include "../../include/lightlib/vendor/Cryptography/Rsa.hpp"
 #include <exception>
 
-namespace lightLib::crypto {
+namespace lightlib::crypto {
     namespace euclid {
         crypt_int gcd(crypt_int a, crypt_int b) {
             while (b != 0) {
