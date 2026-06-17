@@ -29,17 +29,8 @@ lightlib::Server::Server(const std::string& host, unsigned short port)
 
 bool lightlib::Server::initialize() {
     try {
-        ENV::initialize();
         Logger::init("debug.log");
         Logger::registerSignalHandlers();
-        AuthService::secret = ENV::env_variables["AUTH_SECRET"];
-
-        auto configDriver = std::make_shared<lightlib::FileDriver>();
-        configDriver->setRootPath("./");
-        configDriver->initAsync();
-
-        global_config = std::make_shared<ConfigManager>("config.json", configDriver);
-        global_config->load();
 
         json drivers = global_config->getJson("filesystem.drivers");
 
@@ -120,14 +111,16 @@ const std::string& lightlib::Server::getHost() const { return host_; }
 
 void lightlib::Server::initializeConnections() {
     try {
-        Queue::connect(ENV::env_variables["REDIS_HOST"], std::stoi(ENV::env_variables["REDIS_PORT"]));
+        Queue::connect(global_config->get("nosql.host", "127.0.0.1"), 
+            global_config->get("nosql.port", 6379));
     }
     catch (const std::exception& e) {
         Logger::log("Connection to queue failed: " + std::string(e.what()), "ERROR");
     }
 
     try {
-        Cache::connect(ENV::env_variables["REDIS_HOST"], std::stoi(ENV::env_variables["REDIS_PORT"]));
+        Cache::connect(global_config->get("redis.host", "127.0.0.1"),
+            global_config->get("redis.port", 6379));
     }
     catch (const std::exception& e) {
         Logger::log("Connection to NOSQL database failed: " + std::string(e.what()), "ERROR");

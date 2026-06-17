@@ -30,6 +30,7 @@
 #include "SQLString.hpp"
 #include "../vendor/Handlers/ENV.hpp"
 #include "../vendor/Debug/Logger.hpp"
+#include "../Engine.hpp"
 
 namespace lightlib {
 
