@@ -73,20 +73,9 @@ void lightlib::Server::run() {
 
         for (int i = 0; i < threads_count; ++i) {
             threads_.emplace_back([this, i] {
-                Logger::log("Worker thread " + std::to_string(i) + " started on core", "DEBUG");
                 io_.run();
-                Logger::log("Worker thread " + std::to_string(i) + " stopped", "DEBUG");
                 });
         }
-
-        std::thread stats_thread([this] {
-            while (true) {
-                std::this_thread::sleep_for(10s);
-                Logger::log("STATS - Active connections: " + std::to_string(connection_count_.load()) +
-                    ", Total requests: " + std::to_string(total_requests_.load()), "INFO");
-            }
-            });
-        stats_thread.detach();
 
         for (auto& t : threads_) {
             if (t.joinable()) {
@@ -183,7 +172,7 @@ net::awaitable<void> lightlib::Server::handle_connection(tcp::socket socket) {
         socket.shutdown(tcp::socket::shutdown_send, ec);
     }
     catch (const std::exception& e) {
-        Logger::log("Exception in connection: " + std::string(e.what()), "ERROR");
+        //Logger::log("Exception in connection: " + std::string(e.what()), "ERROR");
     }
     catch (...) {
         Logger::log("Unknown exception in connection handler", "ERROR");
