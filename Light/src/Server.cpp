@@ -77,6 +77,15 @@ void lightlib::Server::run() {
                 });
         }
 
+        std::thread stats_thread([this] {
+            while (true) {
+                std::this_thread::sleep_for(10s);
+                Logger::log("STATS - Active connections: " + std::to_string(connection_count_.load()) +
+                    ", Total requests: " + std::to_string(total_requests_.load()), "INFO");
+            }
+            });
+        stats_thread.detach();
+
         for (auto& t : threads_) {
             if (t.joinable()) {
                 t.join();
@@ -172,7 +181,7 @@ net::awaitable<void> lightlib::Server::handle_connection(tcp::socket socket) {
         socket.shutdown(tcp::socket::shutdown_send, ec);
     }
     catch (const std::exception& e) {
-        //Logger::log("Exception in connection: " + std::string(e.what()), "ERROR");
+        Logger::log("Exception in connection: " + std::string(e.what()), "ERROR");
     }
     catch (...) {
         Logger::log("Unknown exception in connection handler", "ERROR");
