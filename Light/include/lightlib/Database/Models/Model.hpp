@@ -359,7 +359,7 @@ namespace lightlib {
                 }
 
                 if (columns.empty()) {
-                    Logger::log("No columns found for insert", "ERROR");
+                    Logger::log("No columns found for insert", "WARNING");
                     return false;
                 }
 
