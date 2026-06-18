@@ -73,9 +73,7 @@ void lightlib::Server::run() {
 
         for (int i = 0; i < threads_count; ++i) {
             threads_.emplace_back([this, i] {
-                Logger::log("Worker thread " + std::to_string(i) + " started on core", "DEBUG");
                 io_.run();
-                Logger::log("Worker thread " + std::to_string(i) + " stopped", "DEBUG");
                 });
         }
 

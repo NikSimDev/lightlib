@@ -280,44 +280,126 @@ namespace lightlib {
 
             const auto& first = models.front();
 
-            std::vector<std::string> columns;
-            for (const auto& key : first->fields) {
-                if (!first->getAttribute(key).empty())
-                    columns.push_back(key);
-            }
+            std::vector<std::shared_ptr<Derived>> toInsert;
+            std::vector<std::shared_ptr<Derived>> toUpdate;
 
-            std::ostringstream valuesStream;
-            for (size_t i = 0; i < models.size(); ++i) {
-                const auto& model = models[i];
-                std::ostringstream rowStream;
-                rowStream << "(";
-                for (size_t j = 0; j < columns.size(); ++j) {
-                    const std::string& col = columns[j];
-                    std::string escaped = SQLString::EscapeString(conn, model->getAttribute(col));
-                    rowStream << escaped;
-                    if (j < columns.size() - 1) rowStream << ", ";
+            for (const auto& model : models) {
+                try {
+                    std::string id = model->getAttribute(Derived::primary_key);
+                    if (!id.empty()) {
+                        toUpdate.push_back(model);
+                    }
+                    else {
+                        toInsert.push_back(model);
+                    }
                 }
-                rowStream << ")";
-                valuesStream << rowStream.str();
-                if (i < models.size() - 1) valuesStream << ", ";
+                catch (const std::exception& e) {
+                    toInsert.push_back(model);
+                }
             }
 
-            std::ostringstream queryStream;
-            queryStream << "INSERT INTO " << Derived::table_name << " (";
-            for (size_t i = 0; i < columns.size(); ++i) {
-                queryStream << columns[i];
-                if (i < columns.size() - 1) queryStream << ", ";
-            }
-            queryStream << ") VALUES " << valuesStream.str() << ";";
+            if (!toUpdate.empty()) {
+                std::ostringstream batchQuery;
 
-            try {
-                database->execute(queryStream.str());
-                return true;
+                for (const auto& model : toUpdate) {
+                    try {
+                        std::string id = model->getAttribute(Derived::primary_key);
+
+                        std::map<std::string, std::string> updateData;
+                        for (const auto& key : model->fields) {
+                            if (key == Derived::primary_key) continue;
+                            try {
+                                std::string value = model->getAttribute(key);
+                                if (!value.empty()) {
+                                    updateData[key] = value;
+                                }
+                            }
+                            catch (const std::exception& e) {}
+                        }
+
+                        if (updateData.empty()) continue;
+
+                        SQLQueryBuilder builder(Derived::table_name);
+                        std::map<std::string, std::string> escapedData;
+                        for (const auto& [key, value] : updateData) {
+                            escapedData[key] = SQLString::EscapeString(conn, value);
+                        }
+
+                        builder.Update(escapedData).Where(Derived::primary_key + " = " + SQLString::EscapeString(conn, id));
+                        batchQuery << builder.get() << "; ";
+                    }
+                    catch (const std::exception& e) {
+                        Logger::log("Failed to update model: " + std::string(e.what()), "ERROR");
+                        return false;
+                    }
+                }
+
+                std::string finalQuery = batchQuery.str();
+                if (!finalQuery.empty()) {
+                    try {
+                        database->execute(finalQuery);
+                    }
+                    catch (const std::exception& e) {
+                        Logger::log("Batch update error: " + std::string(e.what()), "ERROR");
+                        return false;
+                    }
+                }
             }
-            catch (const std::exception& e) {
-                Logger::log("Batch insert error: " + std::string(e.what()), "ERROR");
-                return false;
+
+            if (!toInsert.empty()) {
+                std::vector<std::string> columns;
+                for (const auto& key : first->fields) {
+                    if (key == Derived::primary_key) continue;
+                    try {
+                        if (!first->getAttribute(key).empty()) {
+                            columns.push_back(key);
+                        }
+                    }
+                    catch (const std::exception& e) {}
+                }
+
+                if (columns.empty()) {
+                    Logger::log("No columns found for insert", "WARNING");
+                    return false;
+                }
+
+                std::string valuesStr;
+                for (size_t i = 0; i < toInsert.size(); ++i) {
+                    const auto& model = toInsert[i];
+                    std::string rowStr = "(";
+
+                    for (size_t j = 0; j < columns.size(); ++j) {
+                        const std::string& col = columns[j];
+                        std::string value = model->getAttribute(col);
+                        std::string escaped = SQLString::EscapeString(conn, value);
+                        rowStr += escaped;
+
+                        if (j < columns.size() - 1) rowStr += ", ";
+                    }
+                    rowStr += ")";
+
+                    if (i > 0) valuesStr += ", ";
+                    valuesStr += rowStr;
+                }
+
+                std::string query = "INSERT INTO " + Derived::table_name + " (";
+                for (size_t i = 0; i < columns.size(); ++i) {
+                    query += columns[i];
+                    if (i < columns.size() - 1) query += ", ";
+                }
+                query += ") VALUES " + valuesStr + ";";
+
+                try {
+                    Logger::log("INSERT Query: " + query, "INFO");
+                    database->execute(query);
+                }
+                catch (const std::exception& e) {
+                    Logger::log("Batch insert error: " + std::string(e.what()), "ERROR");
+                    return false;
+                }
             }
+
+            return true;
         }
 
         static std::vector<std::shared_ptr<Derived>> all() {
