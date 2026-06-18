@@ -99,6 +99,15 @@ namespace lightlib {
             return defaultValue;
         }
 
+        std::string get(const std::string key, const char* defaultValue) {
+			return get<std::string>(key, std::string(defaultValue));
+        }
+
+        template<int N>
+        std::string get(const std::string key, const char (&defaultValue)[N]) {
+            return get<std::string>(key, std::string(defaultValue, N - 1));
+        }
+
         template<typename T>
         void set(const std::string& key, const T& value) {
             std::lock_guard<std::mutex> lock(mutex_);
@@ -122,6 +131,19 @@ namespace lightlib {
         std::vector<std::string> getKeysNested() const;
         void loadFromJsonNested(const json& j);
         json getNestedJson(const std::string& prefix = "") const;
-    };
 
+        json getJson(const std::string& key) const;
+
+        template<typename T>
+        T getNested(const std::string& path, const T& defaultValue = T{});
+
+        template<typename T>
+        void setNested(const std::string& path, const T& value);
+
+        bool hasNestedPath(const std::string& path) const;
+        bool removeNested(const std::string& path);
+        std::vector<std::string> getKeysWithPrefix(const std::string& prefix) const;
+
+        static void initGlobal();
+    };
 }
