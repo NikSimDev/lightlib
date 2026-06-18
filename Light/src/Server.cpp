@@ -148,6 +148,7 @@ net::awaitable<void> lightlib::Server::handle_connection(tcp::socket socket) {
 
         while (keep_alive) {
             beast::error_code ec;
+            req = {};
             co_await http::async_read(socket, buffer, req, net::redirect_error(net::use_awaitable, ec));
 
             if (ec == http::error::end_of_stream) {
