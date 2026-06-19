@@ -22,8 +22,10 @@
 
 #include <string>
 #include <chrono>
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
+#include <regex>
+#include <iomanip>
+#include <sstream>
+#include <cctype>
 #include <boost/asio/ip/tcp.hpp>
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/ssl.hpp>
@@ -31,11 +33,11 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/asio/this_coro.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/beast/ssl/ssl_stream.hpp>
+#include <boost/beast/version.hpp>
 #include <nlohmann/json.hpp>
-#include <regex>
-#include <iomanip>
-#include <sstream>
-#include <cctype>
 
 namespace lightlib {
 
@@ -62,9 +64,12 @@ namespace lightlib {
         void set_timeout(const std::chrono::milliseconds& timeout);
         bool is_success(const Response& res) const;
 
+        void set_verify_ssl(bool verify);
+
     private:
         ssl::context ctx_;
         std::chrono::milliseconds timeout_ = std::chrono::seconds(30);
+        bool verify_ssl_ = true;
 
         struct UrlParts {
             std::string protocol;
@@ -84,6 +89,6 @@ namespace lightlib {
         std::string json_to_query_string(const json& j);
         std::string encode_url(const std::string& value);
 
-        Response create_error_response(const std::string& error_message, http::status status = http::status::internal_server_error);
     };
+
 }

@@ -20,79 +20,56 @@
 
 #include "../include/lightlib/App/Http/Helpers/HttpClient.hpp"
 #include "../include/lightlib/vendor/Debug/Logger.hpp"
-#include <boost/asio/use_awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/this_coro.hpp>
-#include <boost/beast/ssl/ssl_stream.hpp>
-#include <boost/beast/version.hpp>
 
 namespace lightlib {
 
     HttpClient::HttpClient() : ctx_(ssl::context::tlsv12_client) {
         Logger::log("HttpClient: Initializing SSL context", "DEBUG");
-        try {
-            ctx_.set_default_verify_paths();
-            ctx_.set_verify_mode(ssl::verify_peer);
-            Logger::log("HttpClient: SSL context initialized successfully", "DEBUG");
+        ctx_.set_default_verify_paths();
+        ctx_.set_verify_mode(ssl::verify_peer);
+        Logger::log("HttpClient: SSL context initialized successfully", "DEBUG");
+    }
+
+    void HttpClient::set_verify_ssl(bool verify) {
+        verify_ssl_ = verify;
+        if (!verify_ssl_) {
+            ctx_.set_verify_mode(ssl::verify_none);
+            Logger::log("HttpClient: SSL verification DISABLED (for testing only!)", "WARNING");
         }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: SSL initialization failed: " + std::string(e.what()), "ERROR");
-            throw;
+        else {
+            ctx_.set_verify_mode(ssl::verify_peer);
+            Logger::log("HttpClient: SSL verification ENABLED", "DEBUG");
         }
     }
 
     net::awaitable<Response> HttpClient::get(const std::string& url, const json& body) {
         Logger::log("HttpClient: GET request to " + url, "INFO");
-        try {
-            auto response = co_await send_request(url, http::verb::get, body);
-            Logger::log("HttpClient: GET request completed with status " + std::to_string(response.result_int()), "DEBUG");
-            co_return response;
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: GET request failed: " + std::string(e.what()), "ERROR");
-            co_return create_error_response(std::string("GET request failed: ") + e.what());
-        }
+        auto response = co_await send_request(url, http::verb::get, body);
+        Logger::log("HttpClient: GET request completed with status " + std::to_string(response.result_int()), "DEBUG");
+        co_return response;
     }
 
     net::awaitable<Response> HttpClient::post(const std::string& url, const json& body) {
         Logger::log("HttpClient: POST request to " + url, "INFO");
         Logger::log("HttpClient: POST body size: " + std::to_string(body.dump().size()) + " bytes", "DEBUG");
-        try {
-            auto response = co_await send_request(url, http::verb::post, body);
-            Logger::log("HttpClient: POST request completed with status " + std::to_string(response.result_int()), "DEBUG");
-            co_return response;
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: POST request failed: " + std::string(e.what()), "ERROR");
-            co_return create_error_response(std::string("POST request failed: ") + e.what());
-        }
+        auto response = co_await send_request(url, http::verb::post, body);
+        Logger::log("HttpClient: POST request completed with status " + std::to_string(response.result_int()), "DEBUG");
+        co_return response;
     }
 
     net::awaitable<Response> HttpClient::put(const std::string& url, const json& body) {
         Logger::log("HttpClient: PUT request to " + url, "INFO");
         Logger::log("HttpClient: PUT body size: " + std::to_string(body.dump().size()) + " bytes", "DEBUG");
-        try {
-            auto response = co_await send_request(url, http::verb::put, body);
-            Logger::log("HttpClient: PUT request completed with status " + std::to_string(response.result_int()), "DEBUG");
-            co_return response;
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: PUT request failed: " + std::string(e.what()), "ERROR");
-            co_return create_error_response(std::string("PUT request failed: ") + e.what());
-        }
+        auto response = co_await send_request(url, http::verb::put, body);
+        Logger::log("HttpClient: PUT request completed with status " + std::to_string(response.result_int()), "DEBUG");
+        co_return response;
     }
 
     net::awaitable<Response> HttpClient::del(const std::string& url, const json& body) {
         Logger::log("HttpClient: DELETE request to " + url, "INFO");
-        try {
-            auto response = co_await send_request(url, http::verb::delete_, body);
-            Logger::log("HttpClient: DELETE request completed with status " + std::to_string(response.result_int()), "DEBUG");
-            co_return response;
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: DELETE request failed: " + std::string(e.what()), "ERROR");
-            co_return create_error_response(std::string("DELETE request failed: ") + e.what());
-        }
+        auto response = co_await send_request(url, http::verb::delete_, body);
+        Logger::log("HttpClient: DELETE request completed with status " + std::to_string(response.result_int()), "DEBUG");
+        co_return response;
     }
 
     HttpClient::UrlParts HttpClient::parse_url(const std::string& url) {
@@ -131,225 +108,261 @@ namespace lightlib {
 
     net::awaitable<Response> HttpClient::send_request(const std::string& url, http::verb method, const json& body) {
         Logger::log("HttpClient: Sending request to " + url, "INFO");
-        try {
-            UrlParts url_parts = parse_url(url);
-            bool use_ssl = (url_parts.protocol == "https");
+        UrlParts url_parts = parse_url(url);
+        bool use_ssl = (url_parts.protocol == "https");
 
-            Logger::log("HttpClient: Using " + std::string(use_ssl ? "HTTPS" : "HTTP") + " protocol", "DEBUG");
+        Logger::log("HttpClient: Using " + std::string(use_ssl ? "HTTPS" : "HTTP") + " protocol", "DEBUG");
 
-            if (use_ssl) {
-                co_return co_await send_https_request(url_parts, method, body);
-            }
-            else {
-                co_return co_await send_http_request(url_parts, method, body);
-            }
+        if (use_ssl) {
+            co_return co_await send_https_request(url_parts, method, body);
         }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: Request failed: " + std::string(e.what()), "ERROR");
-            co_return create_error_response(std::string("Request failed: ") + e.what());
+        else {
+            co_return co_await send_http_request(url_parts, method, body);
         }
     }
 
     net::awaitable<Response> HttpClient::send_http_request(const UrlParts& url_parts, http::verb method, const json& body) {
-        Logger::log("HttpClient: Starting HTTP request to " + url_parts.host + ":" + url_parts.port, "DEBUG");
-
         auto executor = co_await net::this_coro::executor;
 
         tcp::resolver resolver(executor);
         tcp::socket socket(executor);
+
+        auto const results = co_await resolver.async_resolve(
+            url_parts.host,
+            url_parts.port,
+            net::use_awaitable
+        );
+
+        if (results.empty()) {
+            throw std::runtime_error("No DNS records found for " + url_parts.host);
+        }
+
+        bool timed_out = false;
         net::steady_timer timer(executor, timeout_);
 
-        try {
-            Logger::log("HttpClient: Resolving DNS for " + url_parts.host, "DEBUG");
-            auto const results = co_await resolver.async_resolve(
-                url_parts.host,
-                url_parts.port,
-                net::use_awaitable
-            );
-
-            if (results.empty()) {
-                Logger::log("HttpClient: No DNS records found for " + url_parts.host, "ERROR");
-                throw std::runtime_error("No DNS records found for " + url_parts.host);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                socket.close(ignore);
+                Logger::log("HttpClient: Connection timeout", "WARNING");
             }
+            });
 
-            Logger::log("HttpClient: DNS resolved successfully, connecting to " + url_parts.host + ":" + url_parts.port, "DEBUG");
+        co_await socket.async_connect(*results.begin(), net::use_awaitable);
+        timer.cancel();
 
-            timer.expires_after(timeout_);
-            timer.async_wait([&socket](boost::system::error_code ec) {
-                if (!ec) {
-                    Logger::log("HttpClient: Connection timeout, closing socket", "WARNING");
-                    boost::system::error_code ignore;
-                    socket.close(ignore);
-                }
-                });
-
-            co_await socket.async_connect(*results.begin(), net::use_awaitable);
-            timer.cancel();
-
-            Logger::log("HttpClient: Connected successfully", "DEBUG");
-
-            Request req{ method, url_parts.path, 11 };
-            setup_common_headers(req, url_parts.host);
-
-            if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
-                req.set(http::field::content_type, "application/json");
-                if (!body.empty()) {
-                    req.body() = body.dump();
-                    Logger::log("HttpClient: Request body size: " + std::to_string(req.body().size()) + " bytes", "DEBUG");
-                }
-            }
-            else if (method == http::verb::get && !body.empty()) {
-                std::string query_string = json_to_query_string(body);
-                if (!query_string.empty()) {
-                    req.target(url_parts.path + "?" + query_string);
-                    Logger::log("HttpClient: GET query string: " + query_string, "DEBUG");
-                }
-            }
-
-            req.prepare_payload();
-
-            Logger::log("HttpClient: Sending request", "DEBUG");
-            timer.expires_after(timeout_);
-            timer.async_wait([&socket](boost::system::error_code ec) {
-                if (!ec) {
-                    Logger::log("HttpClient: Write timeout, closing socket", "WARNING");
-                    boost::system::error_code ignore;
-                    socket.close(ignore);
-                }
-                });
-
-            co_await http::async_write(socket, req, net::use_awaitable);
-            timer.cancel();
-
-            Logger::log("HttpClient: Request sent, reading response", "DEBUG");
-
-            timer.expires_after(timeout_);
-            timer.async_wait([&socket](boost::system::error_code ec) {
-                if (!ec) {
-                    Logger::log("HttpClient: Read timeout, closing socket", "WARNING");
-                    boost::system::error_code ignore;
-                    socket.close(ignore);
-                }
-                });
-
-            beast::flat_buffer buffer;
-            Response res;
-            co_await http::async_read(socket, buffer, res, net::use_awaitable);
-            timer.cancel();
-
-            Logger::log("HttpClient: Response received with status " + std::to_string(res.result_int()) +
-                ", body size: " + std::to_string(res.body().size()) + " bytes", "DEBUG");
-
-            boost::system::error_code ignore;
-            socket.shutdown(tcp::socket::shutdown_both, ignore);
-            socket.close(ignore);
-
-            co_return res;
-
+        if (timed_out) {
+            throw std::runtime_error("Connection timeout");
         }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: HTTP request error: " + std::string(e.what()), "ERROR");
-            boost::system::error_code ignore;
-            socket.close(ignore);
-            throw;
+
+        Logger::log("HttpClient: Connected successfully", "DEBUG");
+
+        Request req{ method, url_parts.path, 11 };
+        setup_common_headers(req, url_parts.host);
+
+        if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
+            req.set(http::field::content_type, "application/json");
+            if (!body.empty()) {
+                req.body() = body.dump();
+            }
         }
+        else if (method == http::verb::get && !body.empty()) {
+            std::string query_string = json_to_query_string(body);
+            if (!query_string.empty()) {
+                req.target(url_parts.path + "?" + query_string);
+            }
+        }
+
+        req.prepare_payload();
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                socket.close(ignore);
+                Logger::log("HttpClient: Write timeout", "WARNING");
+            }
+            });
+
+        co_await http::async_write(socket, req, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("Write timeout");
+        }
+
+        Logger::log("HttpClient: Request sent, reading response", "DEBUG");
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                socket.close(ignore);
+                Logger::log("HttpClient: Read timeout", "WARNING");
+            }
+            });
+
+        beast::flat_buffer buffer;
+        Response res;
+        co_await http::async_read(socket, buffer, res, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("Read timeout");
+        }
+
+        Logger::log("HttpClient: Response received with status " + std::to_string(res.result_int()) +
+            ", body size: " + std::to_string(res.body().size()) + " bytes", "DEBUG");
+
+        boost::system::error_code ignore;
+        socket.shutdown(tcp::socket::shutdown_both, ignore);
+        socket.close(ignore);
+
+        co_return res;
     }
 
     net::awaitable<Response> HttpClient::send_https_request(const UrlParts& url_parts, http::verb method, const json& body) {
-        Logger::log("HttpClient: Starting HTTPS request to " + url_parts.host + ":" + url_parts.port, "DEBUG");
-
         auto executor = co_await net::this_coro::executor;
 
         beast::ssl_stream<beast::tcp_stream> stream(executor, ctx_);
 
-        try {
-            Logger::log("HttpClient: Setting SNI hostname: " + url_parts.host, "DEBUG");
-            if (!SSL_set_tlsext_host_name(stream.native_handle(), url_parts.host.c_str())) {
-                boost::system::error_code ec{ static_cast<int>(::ERR_get_error()), net::error::get_ssl_category() };
-                Logger::log("HttpClient: SSL_set_tlsext_host_name failed: " + ec.message(), "ERROR");
-                throw boost::system::system_error(ec);
-            }
-
-            tcp::resolver resolver(executor);
-            Logger::log("HttpClient: Resolving DNS for " + url_parts.host, "DEBUG");
-            auto const results = co_await resolver.async_resolve(
-                url_parts.host,
-                url_parts.port,
-                net::use_awaitable
-            );
-
-            if (results.empty()) {
-                Logger::log("HttpClient: No DNS records found for " + url_parts.host, "ERROR");
-                throw std::runtime_error("No DNS records found for " + url_parts.host);
-            }
-
-            Logger::log("HttpClient: DNS resolved successfully, connecting", "DEBUG");
-            beast::get_lowest_layer(stream).connect(results);
-
-            Logger::log("HttpClient: Starting SSL handshake", "DEBUG");
-            co_await stream.async_handshake(ssl::stream_base::client, net::use_awaitable);
-            Logger::log("HttpClient: SSL handshake completed successfully", "DEBUG");
-
-            Request req{ method, url_parts.path, 11 };
-            setup_common_headers(req, url_parts.host);
-
-            if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
-                req.set(http::field::content_type, "application/json");
-                if (!body.empty()) {
-                    req.body() = body.dump();
-                    Logger::log("HttpClient: Request body size: " + std::to_string(req.body().size()) + " bytes", "DEBUG");
-                }
-            }
-            else if (method == http::verb::get && !body.empty()) {
-                std::string query_string = json_to_query_string(body);
-                if (!query_string.empty()) {
-                    req.target(url_parts.path + "?" + query_string);
-                    Logger::log("HttpClient: GET query string: " + query_string, "DEBUG");
-                }
-            }
-
-            req.prepare_payload();
-
-            Logger::log("HttpClient: Sending HTTPS request", "DEBUG");
-            co_await http::async_write(stream, req, net::use_awaitable);
-            Logger::log("HttpClient: Request sent, reading response", "DEBUG");
-
-            beast::flat_buffer buffer;
-            Response res;
-            co_await http::async_read(stream, buffer, res, net::use_awaitable);
-
-            Logger::log("HttpClient: HTTPS response received with status " + std::to_string(res.result_int()) +
-                ", body size: " + std::to_string(res.body().size()) + " bytes", "DEBUG");
-
-            boost::system::error_code ec;
-            stream.shutdown(ec);
-            if (ec) {
-                Logger::log("HttpClient: SSL shutdown error: " + ec.message(), "WARNING");
-            }
-
-            co_return res;
-
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), url_parts.host.c_str())) {
+            boost::system::error_code ec{ static_cast<int>(::ERR_get_error()), net::error::get_ssl_category() };
+            throw boost::system::system_error(ec);
         }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: HTTPS request error: " + std::string(e.what()), "ERROR");
-            boost::system::error_code ec;
-            stream.shutdown(ec);
-            throw;
+
+        tcp::resolver resolver(executor);
+        auto const results = co_await resolver.async_resolve(
+            url_parts.host,
+            url_parts.port,
+            net::use_awaitable
+        );
+
+        if (results.empty()) {
+            throw std::runtime_error("No DNS records found for " + url_parts.host);
         }
+
+        bool timed_out = false;
+        net::steady_timer timer(executor, timeout_);
+
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: HTTPS connection timeout", "WARNING");
+            }
+            });
+
+        boost::system::error_code ec;
+        beast::get_lowest_layer(stream).connect(results, ec);
+        if (ec) {
+            throw std::runtime_error("Connection failed: " + ec.message());
+        }
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("HTTPS connection timeout");
+        }
+
+        Logger::log("HttpClient: Starting SSL handshake", "DEBUG");
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: SSL handshake timeout", "WARNING");
+            }
+            });
+
+        co_await stream.async_handshake(ssl::stream_base::client, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("SSL handshake timeout");
+        }
+
+        Logger::log("HttpClient: SSL handshake completed successfully", "DEBUG");
+
+        Request req{ method, url_parts.path, 11 };
+        setup_common_headers(req, url_parts.host);
+
+        if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
+            req.set(http::field::content_type, "application/json");
+            if (!body.empty()) {
+                req.body() = body.dump();
+            }
+        }
+        else if (method == http::verb::get && !body.empty()) {
+            std::string query_string = json_to_query_string(body);
+            if (!query_string.empty()) {
+                req.target(url_parts.path + "?" + query_string);
+            }
+        }
+
+        req.prepare_payload();
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: HTTPS write timeout", "WARNING");
+            }
+            });
+
+        co_await http::async_write(stream, req, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("HTTPS write timeout");
+        }
+
+        Logger::log("HttpClient: Request sent, reading response", "DEBUG");
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: HTTPS read timeout", "WARNING");
+            }
+            });
+
+        beast::flat_buffer buffer;
+        Response res;
+        co_await http::async_read(stream, buffer, res, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("HTTPS read timeout");
+        }
+
+        Logger::log("HttpClient: HTTPS response received with status " + std::to_string(res.result_int()), "DEBUG");
+
+        stream.shutdown(ec);
+
+        co_return res;
     }
 
     void HttpClient::setup_common_headers(Request& req, const std::string& host) {
-        try {
-            req.set(http::field::host, host);
-            req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-            req.set(http::field::accept, "*/*");
-            req.set(http::field::connection, "close");
-            Logger::log("HttpClient: Headers set for host: " + host, "DEBUG");
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: Failed to setup headers: " + std::string(e.what()), "ERROR");
-            throw;
-        }
+        req.set(http::field::host, host);
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+        req.set(http::field::accept, "*/*");
+        req.set(http::field::connection, "close");
+        Logger::log("HttpClient: Headers set for host: " + host, "DEBUG");
     }
 
     std::string HttpClient::json_to_query_string(const json& j) {
@@ -412,35 +425,10 @@ namespace lightlib {
     }
 
     bool HttpClient::is_success(const Response& res) const {
-        try {
-            bool success = res.result() >= http::status::ok &&
-                res.result() < http::status::multiple_choices;
-            Logger::log("HttpClient: is_success(" + std::to_string(res.result_int()) + ") = " + (success ? "true" : "false"), "DEBUG");
-            return success;
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: is_success exception: " + std::string(e.what()), "ERROR");
-            return false;
-        }
+        bool success = res.result() >= http::status::ok &&
+            res.result() < http::status::multiple_choices;
+        Logger::log("HttpClient: is_success(" + std::to_string(res.result_int()) + ") = " + (success ? "true" : "false"), "DEBUG");
+        return success;
     }
 
-    Response HttpClient::create_error_response(const std::string& error_message, http::status status) {
-        Logger::log("HttpClient: Creating error response: " + error_message, "WARNING");
-        try {
-            Response res{ status, 11 };
-            res.set(http::field::content_type, "text/plain");
-            res.set(http::field::connection, "close");
-            res.body() = error_message;
-            res.prepare_payload();
-            return res;
-        }
-        catch (const std::exception& e) {
-            Logger::log("HttpClient: Critical error creating response: " + std::string(e.what()), "ERROR");
-            Response res{ http::status::internal_server_error, 11 };
-            res.body() = std::string("Critical error creating response: ") + e.what();
-            res.prepare_payload();
-            return res;
-        }
-    }
-
-}
+} 
