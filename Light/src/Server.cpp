@@ -143,18 +143,41 @@ net::awaitable<void> lightlib::Server::handle_connection(tcp::socket socket) {
         bool keep_alive = true;
 
         socket.set_option(tcp::no_delay(true));
+        socket.set_option(boost::asio::socket_base::keep_alive(true));
 
-        while (keep_alive) {
+        net::steady_timer idle_timer(co_await net::this_coro::executor);
+        const auto IDLE_TIMEOUT = std::chrono::seconds(global_config->get("keep-alive-timeout", 60));
+        bool timed_out = false;
+
+        auto reset_timer = [&]() {
+            idle_timer.expires_after(IDLE_TIMEOUT);
+            idle_timer.async_wait([&](beast::error_code ec) {
+                if (!ec) {
+                    timed_out = true;
+                    socket.cancel();
+                }
+                });
+            };
+
+        reset_timer();
+
+        while (keep_alive && !timed_out) {
             beast::error_code ec;
             req = {};
+
             co_await http::async_read(socket, buffer, req, net::redirect_error(net::use_awaitable, ec));
 
             if (ec == http::error::end_of_stream) {
                 break;
             }
             if (ec) {
+                if (ec == net::error::operation_aborted) {
+                    break;
+                }
                 throw boost::system::system_error(ec);
             }
+
+            reset_timer();
 
             total_requests_++;
             keep_alive = req.keep_alive();
@@ -180,14 +203,17 @@ net::awaitable<void> lightlib::Server::handle_connection(tcp::socket socket) {
             }
         }
 
+        idle_timer.cancel();
+
         beast::error_code ec;
         socket.shutdown(tcp::socket::shutdown_send, ec);
+        socket.close(ec);
     }
     catch (const std::exception& e) {
-        Logger::log("Exception in connection: " + std::string(e.what()), "ERROR");
+        Logger::log("Connection error: " + std::string(e.what()), "ERROR");
     }
     catch (...) {
-        Logger::log("Unknown exception in connection handler", "ERROR");
+        Logger::log("Unknown connection error", "ERROR");
     }
 
     connection_count_--;
