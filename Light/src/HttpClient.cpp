@@ -24,10 +24,8 @@
 namespace lightlib {
 
     HttpClient::HttpClient() : ctx_(ssl::context::tlsv12_client) {
-        Logger::log("HttpClient: Initializing SSL context", "DEBUG");
         ctx_.set_default_verify_paths();
         ctx_.set_verify_mode(ssl::verify_peer);
-        Logger::log("HttpClient: SSL context initialized successfully", "DEBUG");
     }
 
     void HttpClient::set_verify_ssl(bool verify) {
@@ -38,42 +36,30 @@ namespace lightlib {
         }
         else {
             ctx_.set_verify_mode(ssl::verify_peer);
-            Logger::log("HttpClient: SSL verification ENABLED", "DEBUG");
         }
     }
 
     net::awaitable<Response> HttpClient::get(const std::string& url, const json& body) {
-        Logger::log("HttpClient: GET request to " + url, "INFO");
         auto response = co_await send_request(url, http::verb::get, body);
-        Logger::log("HttpClient: GET request completed with status " + std::to_string(response.result_int()), "DEBUG");
         co_return response;
     }
 
     net::awaitable<Response> HttpClient::post(const std::string& url, const json& body) {
-        Logger::log("HttpClient: POST request to " + url, "INFO");
-        Logger::log("HttpClient: POST body size: " + std::to_string(body.dump().size()) + " bytes", "DEBUG");
         auto response = co_await send_request(url, http::verb::post, body);
-        Logger::log("HttpClient: POST request completed with status " + std::to_string(response.result_int()), "DEBUG");
         co_return response;
     }
 
     net::awaitable<Response> HttpClient::put(const std::string& url, const json& body) {
-        Logger::log("HttpClient: PUT request to " + url, "INFO");
-        Logger::log("HttpClient: PUT body size: " + std::to_string(body.dump().size()) + " bytes", "DEBUG");
         auto response = co_await send_request(url, http::verb::put, body);
-        Logger::log("HttpClient: PUT request completed with status " + std::to_string(response.result_int()), "DEBUG");
         co_return response;
     }
 
     net::awaitable<Response> HttpClient::del(const std::string& url, const json& body) {
-        Logger::log("HttpClient: DELETE request to " + url, "INFO");
         auto response = co_await send_request(url, http::verb::delete_, body);
-        Logger::log("HttpClient: DELETE request completed with status " + std::to_string(response.result_int()), "DEBUG");
         co_return response;
     }
 
     HttpClient::UrlParts HttpClient::parse_url(const std::string& url) {
-        Logger::log("HttpClient: Parsing URL: " + url, "DEBUG");
         UrlParts parts;
 
         std::regex url_regex(R"(^(https?)://([^:/]+)(?::([0-9]{1,5}))?(/[^?#]*)?(?:\?([^#]*))?(?:#.*)?$)");
@@ -98,20 +84,13 @@ namespace lightlib {
             parts.path = "/";
         }
 
-        Logger::log("HttpClient: Parsed URL - protocol: " + parts.protocol +
-            ", host: " + parts.host +
-            ", port: " + parts.port +
-            ", path: " + parts.path, "DEBUG");
 
         return parts;
     }
 
     net::awaitable<Response> HttpClient::send_request(const std::string& url, http::verb method, const json& body) {
-        Logger::log("HttpClient: Sending request to " + url, "INFO");
         UrlParts url_parts = parse_url(url);
         bool use_ssl = (url_parts.protocol == "https");
-
-        Logger::log("HttpClient: Using " + std::string(use_ssl ? "HTTPS" : "HTTP") + " protocol", "DEBUG");
 
         if (use_ssl) {
             co_return co_await send_https_request(url_parts, method, body);
@@ -156,8 +135,6 @@ namespace lightlib {
             throw std::runtime_error("Connection timeout");
         }
 
-        Logger::log("HttpClient: Connected successfully", "DEBUG");
-
         Request req{ method, url_parts.path, 11 };
         setup_common_headers(req, url_parts.host);
 
@@ -194,8 +171,6 @@ namespace lightlib {
             throw std::runtime_error("Write timeout");
         }
 
-        Logger::log("HttpClient: Request sent, reading response", "DEBUG");
-
         timed_out = false;
         timer.expires_after(timeout_);
         timer.async_wait([&](boost::system::error_code ec) {
@@ -215,9 +190,6 @@ namespace lightlib {
         if (timed_out) {
             throw std::runtime_error("Read timeout");
         }
-
-        Logger::log("HttpClient: Response received with status " + std::to_string(res.result_int()) +
-            ", body size: " + std::to_string(res.body().size()) + " bytes", "DEBUG");
 
         boost::system::error_code ignore;
         socket.shutdown(tcp::socket::shutdown_both, ignore);
@@ -270,8 +242,6 @@ namespace lightlib {
             throw std::runtime_error("HTTPS connection timeout");
         }
 
-        Logger::log("HttpClient: Starting SSL handshake", "DEBUG");
-
         timed_out = false;
         timer.expires_after(timeout_);
         timer.async_wait([&](boost::system::error_code ec) {
@@ -289,8 +259,6 @@ namespace lightlib {
         if (timed_out) {
             throw std::runtime_error("SSL handshake timeout");
         }
-
-        Logger::log("HttpClient: SSL handshake completed successfully", "DEBUG");
 
         Request req{ method, url_parts.path, 11 };
         setup_common_headers(req, url_parts.host);
@@ -328,8 +296,6 @@ namespace lightlib {
             throw std::runtime_error("HTTPS write timeout");
         }
 
-        Logger::log("HttpClient: Request sent, reading response", "DEBUG");
-
         timed_out = false;
         timer.expires_after(timeout_);
         timer.async_wait([&](boost::system::error_code ec) {
@@ -350,8 +316,6 @@ namespace lightlib {
             throw std::runtime_error("HTTPS read timeout");
         }
 
-        Logger::log("HttpClient: HTTPS response received with status " + std::to_string(res.result_int()), "DEBUG");
-
         stream.shutdown(ec);
 
         co_return res;
@@ -362,7 +326,6 @@ namespace lightlib {
         req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
         req.set(http::field::accept, "*/*");
         req.set(http::field::connection, "close");
-        Logger::log("HttpClient: Headers set for host: " + host, "DEBUG");
     }
 
     std::string HttpClient::json_to_query_string(const json& j) {
@@ -391,7 +354,6 @@ namespace lightlib {
             result += key + "=" + value;
         }
 
-        Logger::log("HttpClient: Generated query string length: " + std::to_string(result.size()), "DEBUG");
         return result;
     }
 
@@ -421,13 +383,11 @@ namespace lightlib {
             throw std::invalid_argument("Timeout must be positive");
         }
         timeout_ = timeout;
-        Logger::log("HttpClient: Timeout set to " + std::to_string(timeout.count()) + "ms", "INFO");
     }
 
     bool HttpClient::is_success(const Response& res) const {
         bool success = res.result() >= http::status::ok &&
             res.result() < http::status::multiple_choices;
-        Logger::log("HttpClient: is_success(" + std::to_string(res.result_int()) + ") = " + (success ? "true" : "false"), "DEBUG");
         return success;
     }
 
