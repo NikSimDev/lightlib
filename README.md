@@ -222,10 +222,101 @@ Add all the other packages you need to the end of the list
 sh build.sh
 ```
 
+## lightlib configuration
+
+### Overview
+
+`ConfigManager` is a flexible configuration management system in lightlib that provides:
+- Loading configuration from JSON files
+- Working with nested parameters using dot notation
+- Automatic saving of changes
+- Support for different filesystem drivers
+- Type-safe value retrieval with default values
+
+### Configuration File Structure
+
+#### Complete Structure with Comments
+
+```json
+{
+  "server": {
+    "host": "0.0.0.0",
+    "port": 3501,
+    "keep-alive-timeout": 60
+  },
+  "database": {
+    "host": "127.0.0.1",
+    "port": 5432,
+    "username": "kirill",
+    "password": "qwerty",
+    "database": "light"
+  },
+  "redis": {
+    "host": "127.0.0.1",
+    "port": 6379
+  },
+  "nosql": {
+    "host": "127.0.0.1",
+    "port": 6379
+  },
+  
+  // Filesystem Settings
+  "filesystem": {
+    "drivers": {
+      "local": {
+        "root": "./storage"
+      },
+      "root": {
+        "root": "./"
+      },
+      "default": "local"
+    }
+  }
+}
+```
+
+To initialize the global configuration manager, you need to run `ConfigManager::initGlobal()` at the beginning of program execution.
+
+```cpp
+#include <lightlib/vendor/ConfigManager.hpp>
+
+int main() {
+    ConfigManager::initGlobal();
+    
+    std::string host = global_config->get("server.host", "127.0.0.1");
+    int port = global_config->get("server.port", 3501);
+    
+    lightlib::Server server(host, port);
+    server.initialize();
+    server.run();
+    
+    return 0;
+}
+```
+
+You can immediately convert data to the required types and work with nested config parameters.
+```cpp
+std::string host = config.getNested<std::string>("server.host", "localhost");
+int port = config.getNested<int>("server.port", 8080);
+bool debug = config.getNested<bool>("app.debug", false);
+json database = config.getNested<json>("database", json::object());
+```
+
+#### Saving and reloading
+```cpp
+auto& config = *global_config;
+
+config.save();               // Manual save
+config.reload();             // Reload from file
+config.setAutoSave(true);    // Auto-save on changes
+config.setAutoSave(false);   // Manual save only
+config.clear();              // Clear all values
+```
 ## lightlib Logging System
 
 lightlib provides a high-performance logging system with colored output, log rotation, and signal handling.
 Logging is done both to file and console with color coding.
+
 
 ### Key Features
 
