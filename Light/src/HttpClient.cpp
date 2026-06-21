@@ -19,39 +19,62 @@
  */
 
 #include "../include/lightlib/App/Http/Helpers/HttpClient.hpp"
+#include "../include/lightlib/vendor/Debug/Logger.hpp"
 
-lightlib::HttpClient::HttpClient() : ctx_(ssl::context::tlsv12_client) {
-    ctx_.set_default_verify_paths();
-    ctx_.set_verify_mode(ssl::verify_peer);
-}
+namespace lightlib {
 
-lightlib::Response lightlib::HttpClient::get(const std::string& url, const json& body) {
-    return send_request(url, http::verb::get, body);
-}
+    HttpClient::HttpClient() : ctx_(ssl::context::tlsv12_client) {
+        ctx_.set_default_verify_paths();
+        ctx_.set_verify_mode(ssl::verify_peer);
+    }
 
-lightlib::Response lightlib::HttpClient::post(const std::string& url, const json& body) {
-    return send_request(url, http::verb::post, body);
-}
+    void HttpClient::set_verify_ssl(bool verify) {
+        verify_ssl_ = verify;
+        if (!verify_ssl_) {
+            ctx_.set_verify_mode(ssl::verify_none);
+            Logger::log("HttpClient: SSL verification DISABLED (for testing only!)", "WARNING");
+        }
+        else {
+            ctx_.set_verify_mode(ssl::verify_peer);
+        }
+    }
 
-lightlib::Response lightlib::HttpClient::put(const std::string& url, const json& body) {
-    return send_request(url, http::verb::put, body);
-}
+    net::awaitable<Response> HttpClient::get(const std::string& url, const json& body) {
+        auto response = co_await send_request(url, http::verb::get, body);
+        co_return response;
+    }
 
-lightlib::Response lightlib::HttpClient::del(const std::string& url, const json& body) {
-    return send_request(url, http::verb::delete_, body);
-}
+    net::awaitable<Response> HttpClient::post(const std::string& url, const json& body) {
+        auto response = co_await send_request(url, http::verb::post, body);
+        co_return response;
+    }
 
-lightlib::HttpClient::UrlParts lightlib::HttpClient::parse_url(const std::string & url) {
-    UrlParts parts;
+    net::awaitable<Response> HttpClient::put(const std::string& url, const json& body) {
+        auto response = co_await send_request(url, http::verb::put, body);
+        co_return response;
+    }
 
-    std::regex url_regex(R"(^(https?)://([^:/]+)(?::([0-9]{1,5}))?(/[^?]*)?(?:\?(.*))?$)");
-    std::smatch matches;
+    net::awaitable<Response> HttpClient::del(const std::string& url, const json& body) {
+        auto response = co_await send_request(url, http::verb::delete_, body);
+        co_return response;
+    }
 
-    if (std::regex_match(url, matches, url_regex)) {
+    HttpClient::UrlParts HttpClient::parse_url(const std::string& url) {
+        UrlParts parts;
+
+        std::regex url_regex(R"(^(https?)://([^:/]+)(?::([0-9]{1,5}))?(/[^?#]*)?(?:\?([^#]*))?(?:#.*)?$)");
+        std::smatch matches;
+
+        if (!std::regex_match(url, matches, url_regex)) {
+            Logger::log("HttpClient: Invalid URL format: " + url, "ERROR");
+            throw std::runtime_error("Invalid URL format: " + url);
+        }
+
         parts.protocol = matches[1];
         parts.host = matches[2];
         parts.port = matches[3];
         parts.path = matches[4];
+        parts.query = matches[5];
 
         if (parts.port.empty()) {
             parts.port = (parts.protocol == "https") ? "443" : "80";
@@ -60,170 +83,312 @@ lightlib::HttpClient::UrlParts lightlib::HttpClient::parse_url(const std::string
         if (parts.path.empty()) {
             parts.path = "/";
         }
-    }
-    else {
-        throw std::runtime_error("Invalid URL format: " + url);
+
+
+        return parts;
     }
 
-    return parts;
-}
-
-lightlib::Response lightlib::HttpClient::send_request(const std::string& url, http::verb method, const json& body) {
-    try {
+    net::awaitable<Response> HttpClient::send_request(const std::string& url, http::verb method, const json& body) {
         UrlParts url_parts = parse_url(url);
-
         bool use_ssl = (url_parts.protocol == "https");
 
         if (use_ssl) {
-            return lightlib::HttpClient::send_https_request(url_parts, method, body);
+            co_return co_await send_https_request(url_parts, method, body);
         }
         else {
-            return send_http_request(url_parts, method, body);
+            co_return co_await send_http_request(url_parts, method, body);
+        }
+    }
+
+    net::awaitable<Response> HttpClient::send_http_request(const UrlParts& url_parts, http::verb method, const json& body) {
+        auto executor = co_await net::this_coro::executor;
+
+        tcp::resolver resolver(executor);
+        tcp::socket socket(executor);
+
+        auto const results = co_await resolver.async_resolve(
+            url_parts.host,
+            url_parts.port,
+            net::use_awaitable
+        );
+
+        if (results.empty()) {
+            throw std::runtime_error("No DNS records found for " + url_parts.host);
         }
 
-    }
-    catch (const std::exception& e) {
-        Response res{ http::status::internal_server_error, 11 };
-        res.set(http::field::content_type, "text/plain");
-        res.body() = std::string("Error: ") + e.what();
-        res.prepare_payload();
-        return res;
-    }
-}
+        bool timed_out = false;
+        net::steady_timer timer(executor, timeout_);
 
-lightlib::Response lightlib::HttpClient::send_http_request(const UrlParts& url_parts, http::verb method, const json& body) {
-    net::io_context ioc;
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                socket.close(ignore);
+                Logger::log("HttpClient: Connection timeout", "WARNING");
+            }
+            });
 
-    tcp::resolver resolver(ioc);
-    tcp::socket socket(ioc);
-    net::steady_timer timer(ioc, timeout_);
+        co_await socket.async_connect(*results.begin(), net::use_awaitable);
+        timer.cancel();
 
-    auto const results = resolver.resolve(url_parts.host, url_parts.port);
+        if (timed_out) {
+            throw std::runtime_error("Connection timeout");
+        }
 
-    net::async_connect(socket, results,
-        [&timer](boost::system::error_code ec, const tcp::endpoint&) {
-            timer.cancel();
-        });
+        Request req{ method, url_parts.path, 11 };
+        setup_common_headers(req, url_parts.host);
 
-    Request req{ method, url_parts.path, 11 };
-    setup_common_headers(req, url_parts.host);
+        if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
+            req.set(http::field::content_type, "application/json");
+            if (!body.empty()) {
+                req.body() = body.dump();
+            }
+        }
+        else if (method == http::verb::get && !body.empty()) {
+            std::string query_string = json_to_query_string(body);
+            if (!query_string.empty()) {
+                req.target(url_parts.path + "?" + query_string);
+            }
+        }
 
-    if (method == http::verb::post || method == http::verb::put) {
-        req.set(http::field::content_type, "application/json");
-        req.body() = body.dump();
-    }
-    else if (!body.empty()) {
-        req.target(url_parts.path + "?" + json_to_query_string(body));
-    }
+        req.prepare_payload();
 
-    req.prepare_payload();
-    http::write(socket, req);
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                socket.close(ignore);
+                Logger::log("HttpClient: Write timeout", "WARNING");
+            }
+            });
 
-    timer.async_wait([&socket](boost::system::error_code ec) {
-        if (!ec) socket.close();
-        });
+        co_await http::async_write(socket, req, net::use_awaitable);
+        timer.cancel();
 
-    ioc.run();
+        if (timed_out) {
+            throw std::runtime_error("Write timeout");
+        }
 
-    if (!socket.is_open()) {
-        throw std::runtime_error("Connection timeout");
-    }
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                socket.close(ignore);
+                Logger::log("HttpClient: Read timeout", "WARNING");
+            }
+            });
 
-    beast::flat_buffer buffer;
-    Response res;
-    http::read(socket, buffer, res);
+        beast::flat_buffer buffer;
+        Response res;
+        co_await http::async_read(socket, buffer, res, net::use_awaitable);
+        timer.cancel();
 
-    boost::system::error_code ec;
-    socket.shutdown(tcp::socket::shutdown_both, ec);
+        if (timed_out) {
+            throw std::runtime_error("Read timeout");
+        }
 
-    return res;
-}
+        boost::system::error_code ignore;
+        socket.shutdown(tcp::socket::shutdown_both, ignore);
+        socket.close(ignore);
 
-lightlib::Response lightlib::HttpClient::send_https_request(const UrlParts& url_parts, http::verb method, const json& body) {
-    net::io_context ioc;
-
-    beast::ssl_stream<beast::tcp_stream> stream(ioc, ctx_);
-
-    if (!SSL_set_tlsext_host_name(stream.native_handle(), url_parts.host.c_str())) {
-        beast::error_code ec{ static_cast<int>(::ERR_get_error()), net::error::get_ssl_category() };
-        throw beast::system_error{ ec };
-    }
-
-    tcp::resolver resolver(ioc);
-    auto const results = resolver.resolve(url_parts.host, url_parts.port);
-
-    beast::get_lowest_layer(stream).connect(results);
-
-    stream.handshake(ssl::stream_base::client);
-
-    Request req{ method, url_parts.path, 11 };
-    setup_common_headers(req, url_parts.host);
-
-    if (method == http::verb::post || method == http::verb::put) {
-        req.set(http::field::content_type, "application/json");
-        req.body() = body.dump();
-    }
-    else if (!body.empty()) {
-        req.target(url_parts.path + "?" + json_to_query_string(body));
+        co_return res;
     }
 
-    req.prepare_payload();
+    net::awaitable<Response> HttpClient::send_https_request(const UrlParts& url_parts, http::verb method, const json& body) {
+        auto executor = co_await net::this_coro::executor;
 
-    http::write(stream, req);
+        beast::ssl_stream<beast::tcp_stream> stream(executor, ctx_);
 
-    beast::flat_buffer buffer;
-    Response res;
-    http::read(stream, buffer, res);
+        if (!SSL_set_tlsext_host_name(stream.native_handle(), url_parts.host.c_str())) {
+            boost::system::error_code ec{ static_cast<int>(::ERR_get_error()), net::error::get_ssl_category() };
+            throw boost::system::system_error(ec);
+        }
 
-    beast::error_code ec;
-    stream.shutdown(ec);
+        tcp::resolver resolver(executor);
+        auto const results = co_await resolver.async_resolve(
+            url_parts.host,
+            url_parts.port,
+            net::use_awaitable
+        );
 
-    return res;
-}
+        if (results.empty()) {
+            throw std::runtime_error("No DNS records found for " + url_parts.host);
+        }
 
-void lightlib::HttpClient::setup_common_headers(Request& req, const std::string& host) {
-    req.set(http::field::host, host);
-    req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
-    req.set(http::field::accept, "*/*");
-    req.set(http::field::connection, "close");
-}
+        bool timed_out = false;
+        net::steady_timer timer(executor, timeout_);
 
-std::string lightlib::HttpClient::json_to_query_string(const json& j) {
-    std::string result;
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: HTTPS connection timeout", "WARNING");
+            }
+            });
 
-    if (j.is_object()) {
+        boost::system::error_code ec;
+        beast::get_lowest_layer(stream).connect(results, ec);
+        if (ec) {
+            throw std::runtime_error("Connection failed: " + ec.message());
+        }
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("HTTPS connection timeout");
+        }
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: SSL handshake timeout", "WARNING");
+            }
+            });
+
+        co_await stream.async_handshake(ssl::stream_base::client, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("SSL handshake timeout");
+        }
+
+        Request req{ method, url_parts.path, 11 };
+        setup_common_headers(req, url_parts.host);
+
+        if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
+            req.set(http::field::content_type, "application/json");
+            if (!body.empty()) {
+                req.body() = body.dump();
+            }
+        }
+        else if (method == http::verb::get && !body.empty()) {
+            std::string query_string = json_to_query_string(body);
+            if (!query_string.empty()) {
+                req.target(url_parts.path + "?" + query_string);
+            }
+        }
+
+        req.prepare_payload();
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: HTTPS write timeout", "WARNING");
+            }
+            });
+
+        co_await http::async_write(stream, req, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("HTTPS write timeout");
+        }
+
+        timed_out = false;
+        timer.expires_after(timeout_);
+        timer.async_wait([&](boost::system::error_code ec) {
+            if (!ec) {
+                timed_out = true;
+                boost::system::error_code ignore;
+                beast::get_lowest_layer(stream).socket().close(ignore);
+                Logger::log("HttpClient: HTTPS read timeout", "WARNING");
+            }
+            });
+
+        beast::flat_buffer buffer;
+        Response res;
+        co_await http::async_read(stream, buffer, res, net::use_awaitable);
+        timer.cancel();
+
+        if (timed_out) {
+            throw std::runtime_error("HTTPS read timeout");
+        }
+
+        stream.shutdown(ec);
+
+        co_return res;
+    }
+
+    void HttpClient::setup_common_headers(Request& req, const std::string& host) {
+        req.set(http::field::host, host);
+        req.set(http::field::user_agent, BOOST_BEAST_VERSION_STRING);
+        req.set(http::field::accept, "*/*");
+        req.set(http::field::connection, "close");
+    }
+
+    std::string HttpClient::json_to_query_string(const json& j) {
+        std::string result;
+
+        if (!j.is_object()) {
+            Logger::log("HttpClient: JSON must be an object for query string conversion", "ERROR");
+            throw std::runtime_error("JSON must be an object for query string conversion");
+        }
+
         for (auto it = j.begin(); it != j.end(); ++it) {
-            if (!result.empty()) result += "&";
-            result += encode_url(it.key()) + "=" + encode_url(it.value().dump());
+            if (!result.empty()) {
+                result += "&";
+            }
+
+            std::string key = encode_url(it.key());
+            std::string value;
+
+            if (it.value().is_string()) {
+                value = encode_url(it.value().get<std::string>());
+            }
+            else {
+                value = encode_url(it.value().dump());
+            }
+
+            result += key + "=" + value;
         }
+
+        return result;
     }
 
-    return result;
-}
+    std::string HttpClient::encode_url(const std::string& value) {
+        std::ostringstream escaped;
+        escaped.fill('0');
+        escaped << std::hex;
 
-std::string lightlib::HttpClient::encode_url(const std::string& value) {
-    std::ostringstream escaped;
-    escaped.fill('0');
-    escaped << std::hex;
+        for (char c : value) {
+            unsigned char uc = static_cast<unsigned char>(c);
+            if (std::isalnum(uc) || c == '-' || c == '_' || c == '.' || c == '~') {
+                escaped << c;
+            }
+            else {
+                escaped << std::uppercase;
+                escaped << '%' << std::setw(2) << int(uc);
+                escaped << std::nouppercase;
+            }
+        }
 
-    for (char c : value) {
-        if (isalnum(c) || c == '-' || c == '_' || c == '.' || c == '~') {
-            escaped << c;
-        }
-        else {
-            escaped << std::uppercase;
-            escaped << '%' << std::setw(2) << int((unsigned char)c);
-            escaped << std::nouppercase;
-        }
+        return escaped.str();
     }
 
-    return escaped.str();
-}
+    void HttpClient::set_timeout(const std::chrono::milliseconds& timeout) {
+        if (timeout.count() <= 0) {
+            Logger::log("HttpClient: Invalid timeout value: " + std::to_string(timeout.count()) + "ms", "ERROR");
+            throw std::invalid_argument("Timeout must be positive");
+        }
+        timeout_ = timeout;
+    }
 
-void lightlib::HttpClient::set_timeout(const std::chrono::milliseconds& timeout) {
-    timeout_ = timeout;
-}
+    bool HttpClient::is_success(const Response& res) const {
+        bool success = res.result() >= http::status::ok &&
+            res.result() < http::status::multiple_choices;
+        return success;
+    }
 
-bool lightlib::HttpClient::is_success(const lightlib::Response& res) {
-    return res.result() >= http::status::ok && res.result() < http::status::multiple_choices;
-}
+} 
