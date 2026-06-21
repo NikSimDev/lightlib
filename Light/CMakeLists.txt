@@ -37,6 +37,7 @@ file(GLOB_RECURSE PROJECT_SOURCES
     "src/Database/Migrations/*.cpp"
     "src/Router/*.cpp"
     "src/Filesystem/*.cpp"
+    "src/Cryptography/*.cpp"
 )
 
 list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
