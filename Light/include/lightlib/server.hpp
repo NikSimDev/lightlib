@@ -43,6 +43,8 @@
 #include "Router/RouterRegisterer.hpp"
 #include "Router/Router.hpp"
 #include "Engine.hpp"
+#include "Filesystem/Filesystem.hpp"
+#include "vendor/ConfigManager.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;

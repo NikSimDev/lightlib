@@ -1,3 +1,23 @@
+/*
+ * Copyright (c) 2026 Kirill Sergeev, Nikolay Sugonyako, Andrey Agarkov, Gleb Safyannikov
+ * SPDX-License-Identifier: LGPL-3.0-or-later
+ *
+ * This file is part of lightlib.
+ *
+ * lightlib is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation; either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * lightlib is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+ * GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License
+ * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
+ */
+
 #include "../include/lightlib/server.hpp"
 
 lightlib::Server::Server(const std::string& host, unsigned short port)
@@ -9,10 +29,25 @@ lightlib::Server::Server(const std::string& host, unsigned short port)
 
 bool lightlib::Server::initialize() {
     try {
-        ENV::initialize();
         Logger::init("debug.log");
         Logger::registerSignalHandlers();
-        AuthService::secret = ENV::env_variables["AUTH_SECRET"];
+
+        json drivers = global_config->getJson("filesystem.drivers");
+
+        for (auto& [name, cfg] : drivers.items()) {
+            if (name == "default") continue;
+
+            auto driver = std::make_shared<lightlib::FileDriver>();
+            driver->setRootPath(cfg.value("root", "./"));
+            driver->initAsync();
+
+            StorageManager::getInstance().registerDriver(name, driver);
+        }
+
+        std::string def = global_config->getNested<std::string>("filesystem.default", "local");
+        if (StorageManager::getInstance().hasDriver(def)) {
+            StorageManager::getInstance().setDefaultDriver(def);
+        }
 
         initializeConnections();
         RouterRegisterer::init(io_);
@@ -38,9 +73,7 @@ void lightlib::Server::run() {
 
         for (int i = 0; i < threads_count; ++i) {
             threads_.emplace_back([this, i] {
-                Logger::log("Worker thread " + std::to_string(i) + " started on core", "DEBUG");
                 io_.run();
-                Logger::log("Worker thread " + std::to_string(i) + " stopped", "DEBUG");
                 });
         }
 
@@ -76,14 +109,16 @@ const std::string& lightlib::Server::getHost() const { return host_; }
 
 void lightlib::Server::initializeConnections() {
     try {
-        Queue::connect(ENV::env_variables["REDIS_HOST"], std::stoi(ENV::env_variables["REDIS_PORT"]));
+        Queue::connect(global_config->get("nosql.host", "127.0.0.1"), 
+            global_config->get("nosql.port", 6379));
     }
     catch (const std::exception& e) {
         Logger::log("Connection to queue failed: " + std::string(e.what()), "ERROR");
     }
 
     try {
-        Cache::connect(ENV::env_variables["REDIS_HOST"], std::stoi(ENV::env_variables["REDIS_PORT"]));
+        Cache::connect(global_config->get("redis.host", "127.0.0.1"),
+            global_config->get("redis.port", 6379));
     }
     catch (const std::exception& e) {
         Logger::log("Connection to NOSQL database failed: " + std::string(e.what()), "ERROR");
@@ -111,6 +146,7 @@ net::awaitable<void> lightlib::Server::handle_connection(tcp::socket socket) {
 
         while (keep_alive) {
             beast::error_code ec;
+            req = {};
             co_await http::async_read(socket, buffer, req, net::redirect_error(net::use_awaitable, ec));
 
             if (ec == http::error::end_of_stream) {

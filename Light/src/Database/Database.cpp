@@ -23,9 +23,15 @@
 using namespace lightlib;
 
 Database::Database() {
-    std::string connection_string = "host=" + ENV::env_variables["DB_HOST"] + " user=" + ENV::env_variables["DB_USERNAME"] + " password=" + ENV::env_variables["DB_PASSWORD"] + " dbname=" + ENV::env_variables["DB_DATABASE"] + " client_encoding=UTF8";
+    std::string db_host     = global_config->get("database.host", "localhost");
+    std::string db_port     = global_config->get("database.port", "5432");
+	std::string db_user     = global_config->get("database.username", "postgres");
+	std::string db_password = global_config->get("database.password", "");
+    std::string db_name     = global_config->get("database.database", "postgres");
+
+    std::string connection_string = "host=" + db_host + " user=" + db_user + " password=" + db_password + " dbname=" + db_name + " client_encoding=UTF8";
     conn_ = PQconnectdb(connection_string.c_str());
-    Logger::log("Successfully connected to database " + ENV::env_variables["DB_DATABASE"], "SUCCESS");
+    Logger::log("Successfully connected to database " + db_name, "SUCCESS");
     if (PQstatus(conn_) != CONNECTION_OK) {
         Logger::log("Connection failed: " + std::string(PQerrorMessage(conn_)), "ERROR");
         throw std::runtime_error("Connection failed: " + std::string(PQerrorMessage(conn_)));
