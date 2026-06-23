@@ -37,12 +37,6 @@ list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
 add_library(lightlib_static STATIC ${PROJECT_SOURCES})
 add_library(lightlib_shared SHARED ${PROJECT_SOURCES})
 
-if(TARGET lightlib_static)
-    add_library(lightlib::lightlib ALIAS lightlib_static)
-elseif(TARGET lightlib_shared)
-    add_library(lightlib::lightlib ALIAS lightlib_shared)
-endif()
-
 set(LIBRARIES
     Boost::beast
     Boost::asio
@@ -115,7 +109,21 @@ target_compile_definitions(lightlib_shared PUBLIC
 set_target_properties(lightlib_shared PROPERTIES OUTPUT_NAME "lightlib")
 set_target_properties(lightlib_static PROPERTIES OUTPUT_NAME "lightlib")
 
-install(TARGETS lightlib_static lightlib_shared
+add_library(lightlib INTERFACE)
+
+target_link_libraries(lightlib INTERFACE 
+    lightlib_static
+    lightlib_shared
+)
+
+target_include_directories(lightlib INTERFACE
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
+)
+
+add_library(lightlib::lightlib ALIAS lightlib)
+
+install(TARGETS lightlib_static lightlib_shared lightlib
     EXPORT lightlibTargets
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
@@ -130,4 +138,4 @@ install(EXPORT lightlibTargets
     DESTINATION lib/cmake/lightlib
 )
 
-export(TARGETS lightlib_static lightlib_shared FILE lightlibConfig.cmake NAMESPACE lightlib::)
+export(TARGETS lightlib_static lightlib_shared lightlib FILE lightlibConfig.cmake NAMESPACE lightlib::)
