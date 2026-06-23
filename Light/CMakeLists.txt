@@ -92,11 +92,6 @@ target_include_directories(lightlib_shared PRIVATE
     ${CMAKE_SOURCE_DIR}/Storage
 )
 
-if(WIN32)
-    target_include_directories(lightlib_static PRIVATE ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/include)
-    target_include_directories(lightlib_shared PRIVATE ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/include)
-endif()
-
 target_link_libraries(lightlib_static PUBLIC ${LIBRARIES})
 target_link_libraries(lightlib_shared PUBLIC ${LIBRARIES})
 
