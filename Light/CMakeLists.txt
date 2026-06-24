@@ -109,18 +109,16 @@ target_compile_definitions(lightlib_shared PUBLIC
 set_target_properties(lightlib_shared PROPERTIES OUTPUT_NAME "lightlib")
 set_target_properties(lightlib_static PROPERTIES OUTPUT_NAME "lightlib")
 
-add_library(lightlib INTERFACE)
+export(TARGETS lightlib_static lightlib_shared
+    NAMESPACE lightlib::
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/lightlibTargets.cmake"
+)
 
+add_library(lightlib INTERFACE)
 target_link_libraries(lightlib INTERFACE 
     lightlib_static
     lightlib_shared
 )
-
-target_include_directories(lightlib INTERFACE
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
 add_library(lightlib::lightlib ALIAS lightlib)
 
 install(TARGETS lightlib_static lightlib_shared lightlib
@@ -135,7 +133,5 @@ install(DIRECTORY include/ DESTINATION include)
 install(EXPORT lightlibTargets
     FILE lightlibConfig.cmake
     NAMESPACE lightlib::
-    DESTINATION lib/cmake/lightlib
+    DESTINATION share/lightlib
 )
-
-export(TARGETS lightlib_static lightlib_shared lightlib FILE lightlibConfig.cmake NAMESPACE lightlib::)
