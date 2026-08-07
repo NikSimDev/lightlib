@@ -161,7 +161,11 @@ std::string Database::query(const std::string& sql) {
     Logger::log("Successfull query execution", "INFO");
     return result;
 }
-
+/*
+	@brief Executes a SQL query with parameters and returns the result as a vector of maps.
+	@param sql_template The SQL query template with placeholders for parameters (use '?' for placeholders).
+	@param params A vector of parameters to replace the placeholders in the SQL template.
+*/
 std::vector<std::map<std::string, std::string>> Database::queryToVector(
     const std::string& sql_template,
     const std::vector<std::string>& params)
@@ -212,6 +216,11 @@ std::vector<std::map<std::string, std::string>> Database::queryToVector(
     return result;
 }
 
+/*
+	@brief Executes a SQL query with parameters and returns the first row as a map.
+	@param sql_template The SQL query template with placeholders for parameters (use '?' for placeholders).
+	@param params A vector of parameters to replace the placeholders in the SQL template.
+*/
 std::map<std::string, std::string> Database::queryMap(
     const std::string& sql_template,
     const std::vector<std::string>& params) {

@@ -111,13 +111,18 @@ namespace lightlib {
                 return false;
             }
 
-            std::map<std::string, std::string> insertValues;
             PGconn* conn = database->getConnection();
             if (!conn) {
                 Logger::log("Failed to get database connection", "ERROR");
                 return false;
             }
+
+            bool hasId = attributes.find(Derived::primary_key) != attributes.end() &&
+                !attributes[Derived::primary_key].empty();
+
+            std::map<std::string, std::string> insertValues;
             for (const auto& [key, value] : attributes) {
+                if (key == Derived::primary_key) continue;
                 insertValues[key] = SQLString::EscapeString(conn, value);
             }
 
@@ -127,17 +132,38 @@ namespace lightlib {
             }
 
             SQLQueryBuilder builder(Derived::table_name);
-            builder.Insert(insertValues);
-            std::string query = builder.get();
 
-            try {
-                database->execute(query);
-                afterSave();
-                return true;
+            if (hasId) {
+                builder.Update(insertValues);
+                builder.Where(Derived::primary_key + " = " + attributes[Derived::primary_key]);
+                std::string query = builder.get();
+                try {
+                    database->execute(query);
+                    afterSave();
+                    return true;
+                }
+                catch (const std::exception& e) {
+                    Logger::log(e.what(), "ERROR");
+                    return false;
+                }
             }
-            catch (const std::exception& e) {
-                Logger::log(e.what(), "ERROR");
-                return false;
+            else {
+                builder.Insert(insertValues);
+                std::string query = builder.get();
+                query += " RETURNING " + Derived::primary_key;
+
+                try {
+                    auto row = database->queryMap(query, {});
+                    if (!row.empty() && row.find(Derived::primary_key) != row.end()) {
+                        attributes[Derived::primary_key] = row.at(Derived::primary_key);
+                    }
+                    afterSave();
+                    return true;
+                }
+                catch (const std::exception& e) {
+                    Logger::log(e.what(), "ERROR");
+                    return false;
+                }
             }
         }
 
