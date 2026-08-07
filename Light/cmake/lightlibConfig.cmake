@@ -10,3 +10,7 @@ find_dependency(PostgreSQL REQUIRED)
 find_dependency(OpenSSL REQUIRED)
 
 include("${CMAKE_CURRENT_LIST_DIR}/lightlibTargets.cmake")
+
+if(NOT TARGET lightlib::lightlib)
+    add_library(lightlib::lightlib ALIAS lightlib)
+endif()

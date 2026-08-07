@@ -119,7 +119,6 @@ target_link_libraries(lightlib INTERFACE
     lightlib_static
     lightlib_shared
 )
-add_library(lightlib::lightlib ALIAS lightlib)
 
 install(TARGETS lightlib_static lightlib_shared lightlib
     EXPORT lightlibTargets
