@@ -131,7 +131,12 @@ install(TARGETS lightlib_static lightlib_shared lightlib
 install(DIRECTORY include/ DESTINATION include)
 
 install(EXPORT lightlibTargets
-    FILE lightlibConfig.cmake
     NAMESPACE lightlib::
+    DESTINATION share/lightlib
+    FILE lightlibTargets.cmake      
+)
+
+install(
+    FILES "${CMAKE_SOURCE_DIR}/cmake/lightlibConfig.cmake"
     DESTINATION share/lightlib
 )
