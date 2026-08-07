@@ -136,6 +136,6 @@ install(EXPORT lightlibTargets
 )
 
 install(
-    FILES "${CMAKE_SOURCE_DIR}/cmake/lightlibConfig.cmake"
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lightlibConfig.cmake"
     DESTINATION share/lightlib
 )
