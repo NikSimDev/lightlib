@@ -22,6 +22,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <boost/multiprecision/cpp_int.hpp>
 
 namespace mp = boost::multiprecision;
