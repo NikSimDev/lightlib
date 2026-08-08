@@ -1,145 +1,392 @@
-/*
- * Copyright (c) 2026 Kirill Sergeev, Nikolay Sugonyako, Andrey Agarkov, Gleb Safyannikov
- * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of lightlib.
- *
- * lightlib is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * lightlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
- */
-
-
-#include "../../include/lightlib/vendor/Cryptography/Rsa.hpp"
-#include <exception>
+#include "../../include/lightlib/vendor/Cryptography/RSA.hpp"
+#include <openssl/pem.h>
+#include <openssl/rsa.h>
+#include <openssl/err.h>
+#include <sstream>
+#include <iomanip>
 
 namespace lightlib::crypto {
-    namespace euclid {
-        crypt_int gcd(crypt_int a, crypt_int b) {
-            while (b != 0) {
-                crypt_int tempInt = b;
-                b = a % b;
-                a = tempInt;
-            }
-            return a;
+
+    std::pair<std::string, std::string> RSA::generateKeyPair(int bits) {
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_RSA, nullptr);
+        if (!ctx) {
+            throw std::runtime_error("Failed to create RSA context: " + getLastOpenSSLError());
         }
 
-        void extendedEuclid(crypt_int a, crypt_int b, crypt_int* x, crypt_int* y) {
-            if (b == 0) {
-                *x = 1;
-                *y = 0;
-                return;
-            }
-
-            crypt_int x1, y1;
-            extendedEuclid(b, a % b, &x1, &y1);
-            *x = y1;
-            *y = x1 - ( a / b) * y1;
+        if (EVP_PKEY_keygen_init(ctx) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            throw std::runtime_error("Failed to initialize key generation: " + getLastOpenSSLError());
         }
-    }
 
-    RSA::RSA(const crypt_int &p, const crypt_int &q, const crypt_int &r)
-        : p(0), q(0), phi(0), m(0), r(0), private_key(nullptr), public_key(nullptr)
-    {
-        try {
-            setParameters(p, q, r);
-            evaluateKeys();
-        } catch (std::exception &e) {
-            throw std::runtime_error("RSA exception: Failed to set parameters or calculate keys. " + std::string(e.what()));
+        if (EVP_PKEY_CTX_set_rsa_keygen_bits(ctx, bits) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            throw std::runtime_error("Failed to set RSA key size: " + getLastOpenSSLError());
         }
-    }
 
-    RSA::~RSA() {
-        delete private_key;
-        delete public_key;
-    }
-
-    void RSA::setParameters(crypt_int p, crypt_int q, crypt_int r) {
-        this->p = p;
-        this->q = q;
-        this->r = r;
-        this->m = p * q;
-        this->phi = evaluatePhi(p, q);
-
-        if (!isPrime(p) || !isPrime(q)) {
-            throw std::runtime_error("RSA exception: P or Q not prime.");
-        } else if (r <1 || r >=phi || euclid::gcd(r, phi) != 1) {
-            throw std::runtime_error("RSA exception: R invalid! Must be within 1 < R < ɸ(m) and co-prime with ɸ(m).");
+        EVP_PKEY* pkey = nullptr;
+        if (EVP_PKEY_keygen(ctx, &pkey) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            throw std::runtime_error("Failed to generate RSA key pair: " + getLastOpenSSLError());
         }
-    }
+        EVP_PKEY_CTX_free(ctx);
 
-    void RSA::evaluateKeys() {
-        if (private_key != nullptr || public_key != nullptr) {
-            throw std::runtime_error("RSA exception: Keys already exist.");
+        BIO* bioPub = BIO_new(BIO_s_mem());
+        if (!bioPub) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create BIO for public key");
         }
-        evaluatePublicKey();
-        evaluatePrivateKey();
-    }
 
-    void RSA::evaluatePublicKey() {
-        this->public_key = new publicKey{this->r, this->m};
-    }
-
-    void RSA::evaluatePrivateKey() {
-        crypt_int a = this->phi;
-        crypt_int b = this->r;
-        crypt_int s = 0;
-        crypt_int x = 0;
-
-        euclid::extendedEuclid(a, b, &x, &s);
-        s = (s < 0) ? makePositive(s, this->phi) : s;
-
-        this->private_key = new privateKey{s, this->p, this->q};
-    }
-
-    publicKey *RSA::getPublicKey() const { return public_key; }
-    privateKey *RSA::getPrivateKey() const { return private_key; }
-
-    crypt_int RSA::evaluatePhi(crypt_int a, crypt_int b) {
-        if (!isPrime(a) || !isPrime(b)) return 0;
-        return (a - 1) * (b - 1);
-    }
-
-    crypt_int RSA::makePositive(crypt_int n, crypt_int mod) {
-        crypt_int result = n;
-        while (result < 0) {
-            result += mod;
+        if (PEM_write_bio_PUBKEY(bioPub, pkey) <= 0) {
+            BIO_free(bioPub);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to write public key: " + getLastOpenSSLError());
         }
-        return result;
-    }
+        std::string publicKey = bioToString(bioPub);
+        BIO_free(bioPub);
 
-    crypt_str RSA::encrypt(const std::string& plaintext) {
-        crypt_str result;
-        for (char plainchar : plaintext) {
-            result.push_back(encryptChar(plainchar));
+        BIO* bioPriv = BIO_new(BIO_s_mem());
+        if (!bioPriv) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create BIO for private key");
         }
-        return result;
+
+        if (PEM_write_bio_PrivateKey(bioPriv, pkey, nullptr, nullptr, 0, nullptr, nullptr) <= 0) {
+            BIO_free(bioPriv);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to write private key: " + getLastOpenSSLError());
+        }
+        std::string privateKey = bioToString(bioPriv);
+        BIO_free(bioPriv);
+
+        EVP_PKEY_free(pkey);
+
+        return { publicKey, privateKey };
     }
 
-    std::string RSA::decrypt(const crypt_str& ciphertext) {
+    std::string RSA::encryptWithPublic(const std::string& plaintext, const std::string& publicKey) {
+        EVP_PKEY* pkey = loadPublicKey(publicKey);
+        if (!pkey) {
+            throw std::runtime_error("Failed to load public key: " + getLastOpenSSLError());
+        }
+
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
+        if (!ctx) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create encryption context: " + getLastOpenSSLError());
+        }
+
+        if (EVP_PKEY_encrypt_init(ctx) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to initialize encryption: " + getLastOpenSSLError());
+        }
+
+        if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to set RSA padding: " + getLastOpenSSLError());
+        }
+
+        size_t outLen = 0;
+        if (EVP_PKEY_encrypt(ctx, nullptr, &outLen,
+            reinterpret_cast<const unsigned char*>(plaintext.data()),
+            plaintext.size()) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to get encrypted length: " + getLastOpenSSLError());
+        }
+
+        std::string ciphertext(outLen, 0);
+        if (EVP_PKEY_encrypt(ctx,
+            reinterpret_cast<unsigned char*>(&ciphertext[0]), &outLen,
+            reinterpret_cast<const unsigned char*>(plaintext.data()),
+            plaintext.size()) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to encrypt: " + getLastOpenSSLError());
+        }
+
+        ciphertext.resize(outLen);
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+
+        return ciphertext;
+    }
+
+    std::string RSA::decryptWithPrivate(const std::string& ciphertext, const std::string& privateKey) {
+        EVP_PKEY* pkey = loadPrivateKey(privateKey);
+        if (!pkey) {
+            throw std::runtime_error("Failed to load private key: " + getLastOpenSSLError());
+        }
+
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
+        if (!ctx) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create decryption context: " + getLastOpenSSLError());
+        }
+
+        if (EVP_PKEY_decrypt_init(ctx) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to initialize decryption: " + getLastOpenSSLError());
+        }
+
+        if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to set RSA padding: " + getLastOpenSSLError());
+        }
+
+        size_t outLen = 0;
+        if (EVP_PKEY_decrypt(ctx, nullptr, &outLen,
+            reinterpret_cast<const unsigned char*>(ciphertext.data()),
+            ciphertext.size()) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to get decrypted length: " + getLastOpenSSLError());
+        }
+
+        std::string plaintext(outLen, 0);
+        if (EVP_PKEY_decrypt(ctx,
+            reinterpret_cast<unsigned char*>(&plaintext[0]), &outLen,
+            reinterpret_cast<const unsigned char*>(ciphertext.data()),
+            ciphertext.size()) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to decrypt: " + getLastOpenSSLError());
+        }
+
+        plaintext.resize(outLen);
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+
+        return plaintext;
+    }
+
+    std::string RSA::encryptWithPrivate(const std::string& plaintext, const std::string& privateKey) {
+        return sign(plaintext, privateKey);
+    }
+
+    std::string RSA::decryptWithPublic(const std::string& ciphertext, const std::string& publicKey) {
+        EVP_PKEY* pkey = loadPublicKey(publicKey);
+        if (!pkey) {
+            throw std::runtime_error("Failed to load public key: " + getLastOpenSSLError());
+        }
+
+        EVP_PKEY_CTX* ctx = EVP_PKEY_CTX_new(pkey, nullptr);
+        if (!ctx) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create decryption context: " + getLastOpenSSLError());
+        }
+
+        if (EVP_PKEY_decrypt_init(ctx) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to initialize decryption: " + getLastOpenSSLError());
+        }
+
+        if (EVP_PKEY_CTX_set_rsa_padding(ctx, RSA_PKCS1_OAEP_PADDING) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to set RSA padding: " + getLastOpenSSLError());
+        }
+
+        size_t outLen = 0;
+        if (EVP_PKEY_decrypt(ctx, nullptr, &outLen,
+            reinterpret_cast<const unsigned char*>(ciphertext.data()),
+            ciphertext.size()) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to get decrypted length: " + getLastOpenSSLError());
+        }
+
+        std::string plaintext(outLen, 0);
+        if (EVP_PKEY_decrypt(ctx,
+            reinterpret_cast<unsigned char*>(&plaintext[0]), &outLen,
+            reinterpret_cast<const unsigned char*>(ciphertext.data()),
+            ciphertext.size()) <= 0) {
+            EVP_PKEY_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to decrypt with public key: " + getLastOpenSSLError());
+        }
+
+        plaintext.resize(outLen);
+        EVP_PKEY_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+
+        return plaintext;
+    }
+
+    std::string RSA::sign(const std::string& data, const std::string& privateKey) {
+        EVP_PKEY* pkey = loadPrivateKey(privateKey);
+        if (!pkey) {
+            throw std::runtime_error("Failed to load private key for signing: " + getLastOpenSSLError());
+        }
+
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        if (!ctx) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create signature context");
+        }
+
+        if (EVP_DigestSignInit(ctx, nullptr, EVP_sha256(), nullptr, pkey) <= 0) {
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to initialize signing: " + getLastOpenSSLError());
+        }
+
+        if (EVP_DigestSignUpdate(ctx, data.data(), data.size()) <= 0) {
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to update signature: " + getLastOpenSSLError());
+        }
+
+        size_t sigLen = 0;
+        if (EVP_DigestSignFinal(ctx, nullptr, &sigLen) <= 0) {
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to get signature length: " + getLastOpenSSLError());
+        }
+
+        std::string signature(sigLen, 0);
+        if (EVP_DigestSignFinal(ctx,
+            reinterpret_cast<unsigned char*>(&signature[0]), &sigLen) <= 0) {
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create signature: " + getLastOpenSSLError());
+        }
+
+        signature.resize(sigLen);
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+
+        return signature;
+    }
+
+    bool RSA::verify(const std::string& data, const std::string& signature, const std::string& publicKey) {
+        EVP_PKEY* pkey = loadPublicKey(publicKey);
+        if (!pkey) {
+            throw std::runtime_error("Failed to load public key for verification: " + getLastOpenSSLError());
+        }
+
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        if (!ctx) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create verification context");
+        }
+
+        if (EVP_DigestVerifyInit(ctx, nullptr, EVP_sha256(), nullptr, pkey) <= 0) {
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to initialize verification: " + getLastOpenSSLError());
+        }
+
+        if (EVP_DigestVerifyUpdate(ctx, data.data(), data.size()) <= 0) {
+            EVP_MD_CTX_free(ctx);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to update verification: " + getLastOpenSSLError());
+        }
+
+        int result = EVP_DigestVerifyFinal(ctx,
+            reinterpret_cast<const unsigned char*>(signature.data()),
+            signature.size());
+
+        EVP_MD_CTX_free(ctx);
+        EVP_PKEY_free(pkey);
+
+        return result == 1;
+    }
+
+    bool RSA::validatePublicKey(const std::string& publicKey) {
+        EVP_PKEY* pkey = loadPublicKey(publicKey);
+        if (!pkey) return false;
+        EVP_PKEY_free(pkey);
+        return true;
+    }
+
+    bool RSA::validatePrivateKey(const std::string& privateKey) {
+        EVP_PKEY* pkey = loadPrivateKey(privateKey);
+        if (!pkey) return false;
+        EVP_PKEY_free(pkey);
+        return true;
+    }
+
+    std::string RSA::extractPublicKey(const std::string& privateKey) {
+        EVP_PKEY* pkey = loadPrivateKey(privateKey);
+        if (!pkey) {
+            throw std::runtime_error("Failed to load private key: " + getLastOpenSSLError());
+        }
+
+        BIO* bio = BIO_new(BIO_s_mem());
+        if (!bio) {
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to create BIO");
+        }
+
+        if (PEM_write_bio_PUBKEY(bio, pkey) <= 0) {
+            BIO_free(bio);
+            EVP_PKEY_free(pkey);
+            throw std::runtime_error("Failed to extract public key: " + getLastOpenSSLError());
+        }
+
+        std::string publicKey = bioToString(bio);
+        BIO_free(bio);
+        EVP_PKEY_free(pkey);
+
+        return publicKey;
+    }
+
+    std::string RSA::formatPublicKey(const std::string& pem) {
         std::string result;
-        for (size_t i = 0; i < ciphertext.size(); i++) {
-            result[i] = decryptChar(ciphertext[i]);
+        for (char c : pem) {
+            if (c != '\r' && c != '\n' && c != ' ') {
+                result += c;
+            }
         }
         return result;
     }
 
-    crypt_int RSA::encryptChar(const char& plainchar) const {
-        return powm(static_cast<crypt_int>(plainchar), public_key->r, public_key->m);
+    std::string RSA::formatPrivateKey(const std::string& pem) {
+        return formatPublicKey(pem);
     }
 
-    char RSA::decryptChar(const crypt_int& cipherchar) const {
-        const crypt_int result = powm(cipherchar, private_key->s, private_key->q * private_key->p);
-        return static_cast<char>(result);
+    std::string RSA::bioToString(BIO* bio) {
+        char* data = nullptr;
+        long len = BIO_get_mem_data(bio, &data);
+        if (len <= 0 || !data) {
+            return "";
+        }
+        return std::string(data, len);
+    }
+
+    std::string RSA::getLastOpenSSLError() {
+        char buf[256];
+        ERR_error_string_n(ERR_get_error(), buf, sizeof(buf));
+        return std::string(buf);
+    }
+
+    EVP_PKEY* RSA::loadPublicKey(const std::string& pem) {
+        BIO* bio = BIO_new_mem_buf(pem.data(), static_cast<int>(pem.size()));
+        if (!bio) {
+            return nullptr;
+        }
+
+        EVP_PKEY* pkey = PEM_read_bio_PUBKEY(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+
+        return pkey;
+    }
+
+    EVP_PKEY* RSA::loadPrivateKey(const std::string& pem) {
+        BIO* bio = BIO_new_mem_buf(pem.data(), static_cast<int>(pem.size()));
+        if (!bio) {
+            return nullptr;
+        }
+
+        EVP_PKEY* pkey = PEM_read_bio_PrivateKey(bio, nullptr, nullptr, nullptr);
+        BIO_free(bio);
+
+        return pkey;
     }
 
 }

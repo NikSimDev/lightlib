@@ -1,74 +1,39 @@
-/*
- * Copyright (c) 2026 Kirill Sergeev, Nikolay Sugonyako, Andrey Agarkov, Gleb Safyannikov
- * SPDX-License-Identifier: LGPL-3.0-or-later
- *
- * This file is part of lightlib.
- *
- * lightlib is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation; either version 3 of the License, or
- * (at your option) any later version.
- *
- * lightlib is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU Lesser General Public License for more details.
- *
- * You should have received a copy of the GNU Lesser General Public License
- * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
- */
-
-
 #pragma once
+#include <string>
+#include <vector>
+#include <stdexcept>
+#include <memory>
+#include <openssl/evp.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/rand.h>
+#include <openssl/err.h>
+#include <openssl/bio.h>
 
-#include "Cryptography.hpp"
+namespace lightlib::crypto {
 
-    namespace lightlib::crypto {
+    class RSA {
+    public:
+        static constexpr size_t KEY_SIZE_2048 = 2048;
+        static constexpr size_t KEY_SIZE_4096 = 4096;
 
-        struct privateKey {
-            crypt_int s; // exponent
-            crypt_int p; // prime
-            crypt_int q; // prime
-        };
+        static std::pair<std::string, std::string> generateKeyPair(int bits = KEY_SIZE_2048);
+        static std::string encryptWithPublic(const std::string& plaintext, const std::string& publicKey);
+        static std::string decryptWithPrivate(const std::string& ciphertext, const std::string& privateKey);
+        static std::string encryptWithPrivate(const std::string& plaintext, const std::string& privateKey);
+        static std::string decryptWithPublic(const std::string& ciphertext, const std::string& publicKey);
+        static std::string sign(const std::string& data, const std::string& privateKey);
+        static bool verify(const std::string& data, const std::string& signature, const std::string& publicKey);
+        static bool validatePublicKey(const std::string& publicKey);
+        static bool validatePrivateKey(const std::string& privateKey);
+        static std::string extractPublicKey(const std::string& privateKey);
+        static std::string formatPublicKey(const std::string& pem);
+        static std::string formatPrivateKey(const std::string& pem);
 
-        struct publicKey {
-            crypt_int r; // exponent
-            crypt_int m; // modulus
-        };
-
-        class RSA : public Cryptography {
-            // private key members
-            crypt_int p;
-            crypt_int q;
-            crypt_int phi; // ϕ(m)
-
-            // public key members
-            crypt_int m;
-            crypt_int r;
-
-            privateKey* private_key;
-            publicKey* public_key;
-
-            void setParameters(crypt_int p, crypt_int q, crypt_int r);
-            void evaluateKeys();
-            void evaluatePrivateKey();
-            void evaluatePublicKey();
-
-            static crypt_int makePositive(crypt_int n, crypt_int mod);
-            static crypt_int evaluatePhi(crypt_int a, crypt_int b);
-
-            crypt_int encryptChar(const char &plainchar) const;
-            char decryptChar(const crypt_int& cipherchar) const;
-
-        public:
-            RSA() = delete;
-            RSA(const crypt_int &p, const crypt_int &q, const crypt_int &r);
-            ~RSA() override;
-
-            publicKey* getPublicKey() const;
-            privateKey* getPrivateKey() const;
-
-            crypt_str encrypt(const std::string& plaintext) override;
-            std::string decrypt(const crypt_str& ciphertext) override;
-        };
-    }
+    private:
+        static std::string bioToString(BIO* bio);
+        static std::string getLastOpenSSLError();
+        static EVP_PKEY* loadPublicKey(const std::string& pem);
+        static EVP_PKEY* loadPrivateKey(const std::string& pem);
+    };
+}
