@@ -46,6 +46,12 @@ list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
 add_library(lightlib_static STATIC ${PROJECT_SOURCES})
 add_library(lightlib_shared SHARED ${PROJECT_SOURCES})
 
+if(MSVC)
+    set_target_properties(lightlib_shared PROPERTIES
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+    )
+endif()
+
 set(LIBRARIES
     Boost::beast
     Boost::asio
