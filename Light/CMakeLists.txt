@@ -1,10 +1,19 @@
 # SPDX-License-Identifier: LGPL-3.0-or-later
 cmake_minimum_required(VERSION 3.14)
-project(lightlib VERSION 0.1.3 LANGUAGES CXX)
+project(lightlib VERSION 0.1.4 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(WIN32)
+    set(CMAKE_THREAD_PREFER_PTHREAD OFF)
+    set(THREADS_PREFER_PTHREAD_FLAG OFF)
+    set(CMAKE_USE_WIN32_THREADS_INIT ON)
+    set(CMAKE_THREAD_LIBS_INIT "")
+    set(CMAKE_HAVE_THREADS_LIBRARY 1)
+    set(CMAKE_USE_PTHREADS_INIT 0)
+endif()
 
 if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
     set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
@@ -106,9 +115,6 @@ target_compile_definitions(lightlib_shared PUBLIC
     BOOST_ASIO_HAS_STD_COROUTINE
 )
 
-set_target_properties(lightlib_shared PROPERTIES OUTPUT_NAME "lightlib")
-set_target_properties(lightlib_static PROPERTIES OUTPUT_NAME "lightlib")
-
 export(TARGETS lightlib_static lightlib_shared
     NAMESPACE lightlib::
     FILE "${CMAKE_CURRENT_BINARY_DIR}/lightlibTargets.cmake"
@@ -120,11 +126,19 @@ target_link_libraries(lightlib INTERFACE
     lightlib_shared
 )
 
-install(TARGETS lightlib_static lightlib_shared lightlib
+install(TARGETS lightlib_static
     EXPORT lightlibTargets
     ARCHIVE DESTINATION lib
+)
+
+install(TARGETS lightlib_shared
+    EXPORT lightlibTargets
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
+)
+
+install(TARGETS lightlib
+    EXPORT lightlibTargets
 )
 
 install(DIRECTORY include/ DESTINATION include)
