@@ -135,6 +135,7 @@ install(TARGETS lightlib_shared
     EXPORT lightlibTargets
     LIBRARY DESTINATION lib
     RUNTIME DESTINATION bin
+    ARCHIVE DESTINATION lib
 )
 
 install(TARGETS lightlib
