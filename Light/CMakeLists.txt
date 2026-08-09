@@ -10,14 +10,6 @@ if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
     set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 endif()
 
-if(WIN32)
-    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows" CACHE STRING "")
-elseif(APPLE)
-    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-osx" CACHE STRING "")
-elseif(UNIX)
-    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-linux" CACHE STRING "")
-endif()
-
 if(MSVC)
     add_compile_options(/utf-8 /bigobj)
 endif()
@@ -94,11 +86,6 @@ target_include_directories(lightlib_shared PRIVATE
     ${CMAKE_SOURCE_DIR}/Storage
 )
 
-if(WIN32)
-    target_include_directories(lightlib_static PRIVATE ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/include)
-    target_include_directories(lightlib_shared PRIVATE ${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows/include)
-endif()
-
 target_link_libraries(lightlib_static PUBLIC ${LIBRARIES})
 target_link_libraries(lightlib_shared PUBLIC ${LIBRARIES})
 
@@ -122,7 +109,18 @@ target_compile_definitions(lightlib_shared PUBLIC
 set_target_properties(lightlib_shared PROPERTIES OUTPUT_NAME "lightlib")
 set_target_properties(lightlib_static PROPERTIES OUTPUT_NAME "lightlib")
 
-install(TARGETS lightlib_static lightlib_shared
+export(TARGETS lightlib_static lightlib_shared
+    NAMESPACE lightlib::
+    FILE "${CMAKE_CURRENT_BINARY_DIR}/lightlibTargets.cmake"
+)
+
+add_library(lightlib INTERFACE)
+target_link_libraries(lightlib INTERFACE 
+    lightlib_static
+    lightlib_shared
+)
+
+install(TARGETS lightlib_static lightlib_shared lightlib
     EXPORT lightlibTargets
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
@@ -132,9 +130,12 @@ install(TARGETS lightlib_static lightlib_shared
 install(DIRECTORY include/ DESTINATION include)
 
 install(EXPORT lightlibTargets
-    FILE lightlibConfig.cmake
     NAMESPACE lightlib::
-    DESTINATION lib/cmake/lightlib
+    DESTINATION share/lightlib
+    FILE lightlibTargets.cmake      
 )
 
-export(TARGETS lightlib_static lightlib_shared FILE lightlibConfig.cmake NAMESPACE lightlib::)
+install(
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lightlibConfig.cmake"
+    DESTINATION share/lightlib
+)
