@@ -23,7 +23,7 @@ if(MSVC)
     add_compile_options(/utf-8 /bigobj)
 endif()
 
-find_package(Boost CONFIG REQUIRED COMPONENTS beast asio filesystem system thread date_time smart_ptr optional variant algorithm)
+find_package(Boost CONFIG REQUIRED COMPONENTS beast asio system thread)
 find_package(fmt CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(jwt-cpp CONFIG REQUIRED)
@@ -32,37 +32,11 @@ find_package(ZLIB REQUIRED)
 find_package(PostgreSQL REQUIRED)
 find_package(OpenSSL REQUIRED)
 
-file(GLOB_RECURSE PROJECT_SOURCES
-    "src/*.cpp"
-    "src/Database/*.cpp"
-    "src/Database/Migrations/*.cpp"
-    "src/Router/*.cpp"
-    "src/Filesystem/*.cpp"
-    "src/Cryptography/*.cpp"
-)
-
-list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
-
-add_library(lightlib_static STATIC ${PROJECT_SOURCES})
-add_library(lightlib_shared SHARED ${PROJECT_SOURCES})
-
-if(MSVC)
-    set_target_properties(lightlib_shared PROPERTIES
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
-    )
-endif()
-
 set(LIBRARIES
     Boost::beast
     Boost::asio
-    Boost::filesystem
     Boost::system
     Boost::thread
-    Boost::date_time
-    Boost::smart_ptr
-    Boost::optional
-    Boost::variant
-    Boost::algorithm
     fmt::fmt
     nlohmann_json::nlohmann_json
     jwt-cpp::jwt-cpp
@@ -73,17 +47,23 @@ set(LIBRARIES
     OpenSSL::Crypto
 )
 
-target_include_directories(lightlib_static PUBLIC
+file(GLOB_RECURSE PROJECT_SOURCES
+    "src/*.cpp"
+    "src/Database/*.cpp"
+    "src/Database/Migrations/*.cpp"
+    "src/Router/*.cpp"
+    "src/Filesystem/*.cpp"
+    "src/Cryptography/*.cpp"
+)
+list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
+
+add_library(lightlib_objects OBJECT ${PROJECT_SOURCES})
+
+target_include_directories(lightlib_objects PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
-
-target_include_directories(lightlib_shared PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
-
-target_include_directories(lightlib_static PRIVATE
+target_include_directories(lightlib_objects PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/vendor
     ${CMAKE_SOURCE_DIR}/Database
@@ -91,35 +71,36 @@ target_include_directories(lightlib_static PRIVATE
     ${CMAKE_SOURCE_DIR}/App
     ${CMAKE_SOURCE_DIR}/Storage
 )
-
-target_include_directories(lightlib_shared PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/vendor
-    ${CMAKE_SOURCE_DIR}/Database
-    ${CMAKE_SOURCE_DIR}/Router
-    ${CMAKE_SOURCE_DIR}/App
-    ${CMAKE_SOURCE_DIR}/Storage
+target_compile_features(lightlib_objects PUBLIC cxx_std_20)
+target_compile_definitions(lightlib_objects PUBLIC
+    BOOST_ASIO_HAS_CO_AWAIT
+    BOOST_ASIO_HAS_STD_COROUTINE
 )
 
-target_link_libraries(lightlib_static PUBLIC ${LIBRARIES})
-target_link_libraries(lightlib_shared PUBLIC ${LIBRARIES})
+target_link_libraries(lightlib_objects PUBLIC ${LIBRARIES})
 
-target_compile_features(lightlib_static PUBLIC cxx_std_20)
-target_compile_features(lightlib_shared PUBLIC cxx_std_20)
+set_target_properties(lightlib_objects PROPERTIES
+    UNITY_BUILD ON
+    UNITY_BUILD_BATCH_SIZE 8
+)
+
+add_library(lightlib_static STATIC $<TARGET_OBJECTS:lightlib_objects>)
+add_library(lightlib_shared SHARED $<TARGET_OBJECTS:lightlib_objects>)
+
+if(MSVC)
+    set_target_properties(lightlib_shared PROPERTIES
+        WINDOWS_EXPORT_ALL_SYMBOLS ON
+    )
+endif()
 
 target_compile_definitions(lightlib_shared PRIVATE LIGHTLIB_EXPORTS)
 target_compile_definitions(lightlib_shared PUBLIC LIGHTLIB_SHARED)
 target_compile_definitions(lightlib_static PUBLIC)
 
-target_compile_definitions(lightlib_static PUBLIC 
-    BOOST_ASIO_HAS_CO_AWAIT
-    BOOST_ASIO_HAS_STD_COROUTINE
-)
+set_target_properties(lightlib_shared PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
-target_compile_definitions(lightlib_shared PUBLIC 
-    BOOST_ASIO_HAS_CO_AWAIT
-    BOOST_ASIO_HAS_STD_COROUTINE
-)
+target_link_libraries(lightlib_static PUBLIC ${LIBRARIES})
+target_link_libraries(lightlib_shared PUBLIC ${LIBRARIES})
 
 export(TARGETS lightlib_static lightlib_shared
     NAMESPACE lightlib::
