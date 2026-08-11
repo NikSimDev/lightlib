@@ -59,10 +59,23 @@ list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
 
 add_library(lightlib_objects OBJECT ${PROJECT_SOURCES})
 
+target_link_libraries(lightlib_objects PUBLIC Boost::boost)
+
+target_include_directories(lightlib_objects PRIVATE
+    ${fmt_INCLUDE_DIRS}
+    ${nlohmann_json_INCLUDE_DIRS}
+    ${jwt-cpp_INCLUDE_DIRS}
+    ${hiredis_INCLUDE_DIRS}
+    ${ZLIB_INCLUDE_DIRS}
+    ${PostgreSQL_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
+)
+
 target_include_directories(lightlib_objects PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
 )
+
 target_include_directories(lightlib_objects PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/vendor
@@ -71,13 +84,12 @@ target_include_directories(lightlib_objects PRIVATE
     ${CMAKE_SOURCE_DIR}/App
     ${CMAKE_SOURCE_DIR}/Storage
 )
+
 target_compile_features(lightlib_objects PUBLIC cxx_std_20)
 target_compile_definitions(lightlib_objects PUBLIC
     BOOST_ASIO_HAS_CO_AWAIT
     BOOST_ASIO_HAS_STD_COROUTINE
 )
-
-target_link_libraries(lightlib_objects PUBLIC ${LIBRARIES})
 
 set_target_properties(lightlib_objects PROPERTIES
     UNITY_BUILD ON
