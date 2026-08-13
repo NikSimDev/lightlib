@@ -406,6 +406,16 @@ namespace lightlib {
         global_config->load();
     }
 
+    void ConfigManager::initGlobal(std::string filepath)
+    {
+        auto configDriver = std::make_shared<lightlib::FileDriver>();
+        configDriver->setRootPath("./");
+        configDriver->initAsync();
+
+        global_config = std::make_shared<ConfigManager>(filepath, configDriver);
+        global_config->load();
+    }
+
     template std::string ConfigManager::getNested<std::string>(const std::string&, const std::string&);
     template int ConfigManager::getNested<int>(const std::string&, const int&);
     template bool ConfigManager::getNested<bool>(const std::string&, const bool&);

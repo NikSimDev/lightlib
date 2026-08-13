@@ -2,9 +2,16 @@
 cmake_minimum_required(VERSION 3.14)
 project(lightlib VERSION 0.1.4 LANGUAGES CXX)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(WIN32)
+    set(LIGHTLIB_DIR "${CMAKE_SOURCE_DIR}/libs/lightlib/x64-windows")
+elseif(UNIX)
+    set(LIGHTLIB_DIR "${CMAKE_SOURCE_DIR}/libs/lightlib/x64-linux")
+endif()
 
 if(WIN32)
     set(CMAKE_THREAD_PREFER_PTHREAD OFF)
@@ -45,6 +52,7 @@ set(LIBRARIES
     PostgreSQL::PostgreSQL
     OpenSSL::SSL
     OpenSSL::Crypto
+    GTest::gtest
 )
 
 file(GLOB_RECURSE PROJECT_SOURCES
@@ -69,6 +77,7 @@ target_include_directories(lightlib_objects PRIVATE
     ${ZLIB_INCLUDE_DIRS}
     ${PostgreSQL_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
+    ${GTEST_INCLUDE_DIRS}
 )
 
 target_include_directories(lightlib_objects PUBLIC
@@ -177,3 +186,59 @@ install(
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake/lightlibConfig.cmake"
     DESTINATION share/lightlib
 )
+
+option(BUILD_TESTS "Build tests" ON)
+
+if(BUILD_TESTS)
+    message(STATUS "Building tests")
+    
+    find_package(GTest CONFIG REQUIRED)
+
+    get_target_property(GTEST_INCLUDE_DIRS GTest::gtest INTERFACE_INCLUDE_DIRECTORIES)
+
+    add_executable(lightlib_tests
+        tests/main.cpp
+        tests/unit/configuration/config_test.cpp
+    )
+
+    target_include_directories(lightlib_tests PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/tests
+        ${fmt_INCLUDE_DIRS}
+        ${nlohmann_json_INCLUDE_DIRS}
+        ${jwt-cpp_INCLUDE_DIRS}
+        ${hiredis_INCLUDE_DIRS}
+        ${ZLIB_INCLUDE_DIRS}
+        ${PostgreSQL_INCLUDE_DIRS}
+        ${OPENSSL_INCLUDE_DIR}
+        ${GTEST_INCLUDE_DIRS}
+    )
+    
+    target_compile_definitions(lightlib_tests PRIVATE
+        BOOST_ASIO_HAS_CO_AWAIT
+        BOOST_ASIO_HAS_STD_COROUTINE
+    )
+    
+    target_compile_features(lightlib_tests PRIVATE cxx_std_20)
+
+    target_link_libraries(lightlib_tests PRIVATE
+        lightlib_static
+        GTest::gtest
+        GTest::gtest_main
+        GTest::gmock
+        GTest::gmock_main
+        ${LIBRARIES}
+    )
+
+    include(GoogleTest)
+    gtest_discover_tests(lightlib_tests)
+
+    add_custom_target(check
+        COMMAND $<TARGET_FILE:lightlib_tests>
+        DEPENDS lightlib_tests
+        COMMENT "Running tests..."
+    )
+    
+    message(STATUS "Tests configured. Run 'cmake --build . --target check' to run tests")
+endif()
