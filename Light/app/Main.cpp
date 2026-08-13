@@ -18,43 +18,17 @@
  * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
  */
 
-#include <boost/beast/core.hpp>
-#include <boost/beast/http.hpp>
-#include <boost/beast/version.hpp>
-#include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/awaitable.hpp>
-#include <boost/asio/co_spawn.hpp>
-#include <boost/asio/detached.hpp>
-#include <boost/asio/use_awaitable.hpp>
-#include <boost/asio/steady_timer.hpp>
-#include <boost/config.hpp>
-#include "../include/lightlib/vendor/Handlers/ENV.hpp"
-#include "../include/lightlib/Database/Queue.hpp"
-#include "../include/lightlib/Database/Cache.hpp"
-#include "../include/lightlib/Database/Migrations/MigrationManager.hpp"
-#include "../include/lightlib/App/Http/Services/AuthService.hpp"
-#include "../include/lightlib/Router/RouterRegisterer.hpp"
-#include "../include/lightlib/Router/Router.hpp"
-#include "../include/lightlib/server.hpp"
+#include "../include/lightlib/Core"
+#include "../include/lightlib/DB"
+#include "../include/lightlib/Http"
+#include "../include/lightlib/Engine.hpp"
 
 int main() {
     try {
-        const unsigned short port = std::stoi(lightlib::getEnvironmentVariable("S_PORT"));
-        const std::string host = lightlib::getEnvironmentVariable("S_HOST");
+        lightlib::ConfigManager::initGlobal();
 
-        lightlib::Server server(host, port);
-
-        if (!server.initialize()) {
-            std::cerr << "Failed to initialize server" << std::endl;
-            return 1;
-        }
-
-        std::cout << "Starting server on " << host << ":" << port << std::endl;
-
-        server.run();
-
-        lightlib::Logger::log("Application finished", "INFO");
-        return 0;
+        lightlib::Logger::log("Server initialized.", "INFO");
+        std::cout << lightlib::global_config;
     }
     catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;

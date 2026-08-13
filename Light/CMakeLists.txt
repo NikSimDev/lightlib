@@ -107,6 +107,30 @@ export(TARGETS lightlib_static lightlib_shared
     FILE "${CMAKE_CURRENT_BINARY_DIR}/lightlibTargets.cmake"
 )
 
+add_executable(lightlib_app app/Main.cpp)
+
+target_include_directories(lightlib_app PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/vendor
+    ${CMAKE_SOURCE_DIR}/Database
+    ${CMAKE_SOURCE_DIR}/Router
+    ${CMAKE_SOURCE_DIR}/App
+    ${CMAKE_SOURCE_DIR}/Storage
+)
+
+target_compile_features(lightlib_app PRIVATE cxx_std_20)
+
+target_compile_definitions(lightlib_app PRIVATE
+    BOOST_ASIO_HAS_CO_AWAIT
+    BOOST_ASIO_HAS_STD_COROUTINE
+)
+
+target_link_libraries(lightlib_app PRIVATE 
+    lightlib_static
+    ${LIBRARIES}
+)
+
 add_library(lightlib INTERFACE)
 target_link_libraries(lightlib INTERFACE 
     lightlib_static
