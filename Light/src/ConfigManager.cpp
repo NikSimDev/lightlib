@@ -123,8 +123,6 @@ namespace lightlib {
             throw std::runtime_error("Driver is not initialized");
         }
 
-        std::lock_guard<std::mutex> lock(mutex_);
-
         json j = unflattenMap(config_);
         std::string content = j.dump(4);
         driver_->put(configFilePath_, content);

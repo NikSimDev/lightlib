@@ -25,10 +25,31 @@
 
 int main() {
     try {
-        lightlib::ConfigManager::initGlobal();
+        lightlib::ConfigManager::initGlobal("config_test.json");
+		lightlib::global_config->setAutoSave(false);
 
         lightlib::Logger::log("Server initialized.", "INFO");
-        std::cout << lightlib::global_config;
+        std::cout << lightlib::global_config << std::endl;
+
+        std::string server_host = lightlib::global_config->get("server.host", "0.0.0.1");
+		int server_port = lightlib::global_config->get("server.port", 8080);
+
+        lightlib::Logger::log("server host: " + server_host, "INFO");
+        lightlib::Logger::log("server port: " + std::to_string(server_port), "INFO");
+
+        lightlib::global_config->set("server.host", server_host);
+        lightlib::Logger::log("UPDATE VALUE: " + server_host, "INFO");
+        lightlib::global_config->set("server.host_new", "0.0.0.11");
+
+        server_host = lightlib::global_config->get("server.host", "0.0.0.1");
+        std::string host_new = lightlib::global_config->get("server.host_new", "0.0.0.2");
+
+        lightlib::Logger::log("server updated host: " + server_host, "INFO");
+        lightlib::Logger::log("server new host: " + host_new, "INFO");
+
+		lightlib::Server server(server_host, server_port);
+		server.run();
+		return 0;
     }
     catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;

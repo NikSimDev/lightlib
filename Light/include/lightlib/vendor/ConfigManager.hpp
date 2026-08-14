@@ -40,7 +40,7 @@ namespace lightlib {
         std::string configFilePath_;
         std::unordered_map<std::string, std::string> config_;
         mutable std::mutex mutex_;
-        bool autoSave_ = true;
+        bool autoSave_ = false;
 
         template<typename T>
         std::string toString(const T& value) {
@@ -48,6 +48,9 @@ namespace lightlib {
                 return value;
             }
             else if constexpr (std::is_same_v<T, const char*>) {
+                return std::string(value);
+            }
+            else if constexpr (std::is_same_v<T, char*>) {
                 return std::string(value);
             }
             else {
