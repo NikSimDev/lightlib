@@ -154,7 +154,7 @@ std::string SQLQueryBuilder::get() {
             query << " ORDER BY ";
 
             int i = 0;
-            int size = orderByColumns.size();
+            size_t size = orderByColumns.size();
             for (const auto& [k, v] : orderByColumns) {
                 query << k << " " << v;
                 if (++i < size) {
@@ -210,7 +210,7 @@ std::string SQLQueryBuilder::get() {
             query << " ORDER BY ";
 
             int i = 0;
-            int size = orderByColumns.size();
+            size_t size = orderByColumns.size();
             for (const auto& [k, v] : orderByColumns) {
                 query << k << " " << v;
                 if (++i < size) {

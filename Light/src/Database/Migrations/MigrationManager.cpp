@@ -38,7 +38,7 @@ MigrationManager::MigrationManager(Database& db) : db(db) {
     }
     catch (const std::exception& e) {
         Logger::log("Error loading migrations", "ERROR");
-        throw;
+        throw e;
     }
 }
 

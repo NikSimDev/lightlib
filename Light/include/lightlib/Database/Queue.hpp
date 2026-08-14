@@ -34,7 +34,7 @@ namespace lightlib {
         static void disconnect();
         static void push(const std::string& queue_name, const std::string& value);
         static std::string pop(const std::string& queue_name);
-        static int length(const std::string& queue_name);
+        static __int64 length(const std::string& queue_name);
 
     private:
         static redisContext* context_;

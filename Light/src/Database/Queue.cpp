@@ -100,7 +100,7 @@ std::string Queue::pop(const std::string& queue_name) {
     return result;
 }
 
-int Queue::length(const std::string& queue_name) {
+__int64 Queue::length(const std::string& queue_name) {
     if (!context_) {
         Logger::log("Not connected to Redis.", "ERROR");
         throw std::runtime_error("Not connected to Redis.");
@@ -112,7 +112,7 @@ int Queue::length(const std::string& queue_name) {
         throw std::runtime_error("Failed to execute LLEN command.");
     }
 
-    int len = reply->integer;
+    __int64 len = reply->integer;
     freeReplyObject(reply);
     std::cout << "Queue '" << queue_name << "' length: " << len << std::endl;
     return len;
