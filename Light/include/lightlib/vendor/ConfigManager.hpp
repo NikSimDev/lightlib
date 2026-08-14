@@ -145,5 +145,6 @@ namespace lightlib {
         std::vector<std::string> getKeysWithPrefix(const std::string& prefix) const;
 
         static void initGlobal();
+        static void initGlobal(std::string filepath);
     };
 }

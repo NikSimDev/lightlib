@@ -16,6 +16,7 @@
     "libpq",
     "nlohmann-json",
     "zlib",
-    "picojson"
+    "picojson",
+    "gtest"
   ]
 }
