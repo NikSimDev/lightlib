@@ -52,7 +52,6 @@ set(LIBRARIES
     PostgreSQL::PostgreSQL
     OpenSSL::SSL
     OpenSSL::Crypto
-    GTest::gtest
 )
 
 file(GLOB_RECURSE PROJECT_SOURCES
