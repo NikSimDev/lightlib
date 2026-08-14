@@ -18,8 +18,8 @@ std::string AES256::deriveKeyFromPassword(const std::string& password, const std
     std::string derivedKey(KEY_SIZE, '\0');
 
     int result = PKCS5_PBKDF2_HMAC(
-        password.c_str(), password.size(),
-        reinterpret_cast<const unsigned char*>(salt.c_str()), salt.size(),
+        password.c_str(), (int)password.size(),
+        reinterpret_cast<const unsigned char*>(salt.c_str()), (int)salt.size(),
         iterations,
         EVP_sha256(),
         KEY_SIZE,
@@ -55,7 +55,7 @@ std::string AES256::encrypt(const std::string& plaintext, const std::string& key
 
     if (EVP_EncryptUpdate(ctx,
         reinterpret_cast<unsigned char*>(&ciphertext[0]), &len,
-        reinterpret_cast<const unsigned char*>(plaintext.c_str()), plaintext.size()) != 1) {
+        reinterpret_cast<const unsigned char*>(plaintext.c_str()), (int)plaintext.size()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Encryption update failed");
     }
@@ -100,7 +100,7 @@ std::string AES256::decrypt(const std::string& ciphertext, const std::string& ke
 
     if (EVP_DecryptUpdate(ctx,
         reinterpret_cast<unsigned char*>(&plaintext[0]), &len,
-        reinterpret_cast<const unsigned char*>(ciphertext.c_str()), ciphertext.size()) != 1) {
+        reinterpret_cast<const unsigned char*>(ciphertext.c_str()), (int)ciphertext.size()) != 1) {
         EVP_CIPHER_CTX_free(ctx);
         throw std::runtime_error("Decryption update failed");
     }
@@ -214,7 +214,7 @@ bool AES256::validateIV(const std::string& iv) {
     return true;
 }
 
-std::string AES256::generateRandomBytes(size_t size) {
+std::string AES256::generateRandomBytes(int size) {
     std::string bytes(size, '\0');
 
     if (RAND_bytes(reinterpret_cast<unsigned char*>(&bytes[0]), size) != 1) {
@@ -229,7 +229,7 @@ std::string AES256::computeHmac(const std::string& data, const std::string& key)
 
     unsigned int len = 0;
     HMAC(EVP_sha256(),
-        reinterpret_cast<const unsigned char*>(key.c_str()), key.size(),
+        reinterpret_cast<const unsigned char*>(key.c_str()), (int)key.size(),
         reinterpret_cast<const unsigned char*>(data.c_str()), data.size(),
         reinterpret_cast<unsigned char*>(&hmac[0]), &len);
 

@@ -32,7 +32,7 @@ namespace lightlib::crypto {
         static bool validateIV(const std::string& iv);
 
     private:
-        static std::string generateRandomBytes(size_t size);
+        static std::string generateRandomBytes(int size);
         static std::string computeHmac(const std::string& data, const std::string& key);
     };
 }

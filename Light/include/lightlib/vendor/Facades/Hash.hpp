@@ -47,7 +47,7 @@ namespace lightlib {
         static inline uint32_t parallelism = 1;
         static inline uint32_t output_length = 32;
 
-        static std::vector<unsigned char> generateSalt(size_t length);
+        static std::vector<unsigned char> generateSalt(int length);
         static std::pair<std::string, std::vector<unsigned char>> hash(const std::string& password, std::vector<unsigned char> salt = {});
         static std::vector<uint8_t> hexStringToBytes(const std::string& hex);
         static std::string bytesToHexString(const std::vector<uint8_t>& bytes);

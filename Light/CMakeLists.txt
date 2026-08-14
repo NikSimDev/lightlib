@@ -20,10 +20,8 @@ if(WIN32)
     set(CMAKE_THREAD_LIBS_INIT "")
     set(CMAKE_HAVE_THREADS_LIBRARY 1)
     set(CMAKE_USE_PTHREADS_INIT 0)
-endif()
-
-if(NOT DEFINED CMAKE_TOOLCHAIN_FILE AND DEFINED ENV{VCPKG_ROOT})
-    set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
+    add_compile_definitions(_WIN32_WINNT=0x0601)
+    add_compile_definitions(WIN32_LEAN_AND_MEAN NOMINMAX)
 endif()
 
 if(MSVC)
