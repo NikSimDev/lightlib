@@ -31,7 +31,6 @@ endif()
 find_package(Boost CONFIG REQUIRED COMPONENTS beast asio system thread filesystem)
 find_package(fmt CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
-find_package(jwt-cpp CONFIG REQUIRED)
 find_package(hiredis CONFIG REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(PostgreSQL REQUIRED)
@@ -45,7 +44,6 @@ set(LIBRARIES
     Boost::filesystem
     fmt::fmt
     nlohmann_json::nlohmann_json
-    jwt-cpp::jwt-cpp
     hiredis::hiredis
     ZLIB::ZLIB
     PostgreSQL::PostgreSQL
@@ -70,7 +68,6 @@ target_link_libraries(lightlib_objects PUBLIC Boost::boost)
 target_include_directories(lightlib_objects PRIVATE
     ${fmt_INCLUDE_DIRS}
     ${nlohmann_json_INCLUDE_DIRS}
-    ${jwt-cpp_INCLUDE_DIRS}
     ${hiredis_INCLUDE_DIRS}
     ${ZLIB_INCLUDE_DIRS}
     ${PostgreSQL_INCLUDE_DIRS}
@@ -205,7 +202,6 @@ if(BUILD_TESTS)
         ${CMAKE_SOURCE_DIR}/tests
         ${fmt_INCLUDE_DIRS}
         ${nlohmann_json_INCLUDE_DIRS}
-        ${jwt-cpp_INCLUDE_DIRS}
         ${hiredis_INCLUDE_DIRS}
         ${ZLIB_INCLUDE_DIRS}
         ${PostgreSQL_INCLUDE_DIRS}
