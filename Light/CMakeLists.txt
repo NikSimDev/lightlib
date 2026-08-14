@@ -30,7 +30,7 @@ if(MSVC)
     add_compile_options(/utf-8 /bigobj)
 endif()
 
-find_package(Boost CONFIG REQUIRED COMPONENTS beast asio system thread)
+find_package(Boost CONFIG REQUIRED COMPONENTS beast asio system thread filesystem)
 find_package(fmt CONFIG REQUIRED)
 find_package(nlohmann_json CONFIG REQUIRED)
 find_package(jwt-cpp CONFIG REQUIRED)
@@ -44,6 +44,7 @@ set(LIBRARIES
     Boost::asio
     Boost::system
     Boost::thread
+    Boost::filesystem
     fmt::fmt
     nlohmann_json::nlohmann_json
     jwt-cpp::jwt-cpp
