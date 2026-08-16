@@ -21,7 +21,18 @@
 #pragma once
 
 #include <gtest/gtest.h>
+#include <memory>
+#include <thread>
+#include <chrono>
+#include <atomic>
 #include "../include/lightlib/Core"
 #include "../include/lightlib/DB"
 #include "../include/lightlib/Http"
 #include "../include/lightlib/Engine.hpp"
+
+extern std::shared_ptr<lightlib::Server> g_test_server;
+extern std::atomic<bool> g_server_ready;
+extern std::thread g_server_thread;
+
+extern int port_global;
+extern std::string host_global;

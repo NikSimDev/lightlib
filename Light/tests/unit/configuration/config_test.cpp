@@ -62,11 +62,11 @@ TEST(ConfigTest, HasConfigValue) {
 
 TEST(ConfigTest, GetKeysWithPrefix) {
 	lightlib::ConfigManager::initGlobal("config_test.json");
-	lightlib::global_config->set("server.host", "localhost");
+	lightlib::global_config->set("server.host", "0.0.0.0");
 	lightlib::global_config->set<int>("server.port", 3502);
 	nlohmann::json keys = lightlib::global_config->getNestedJson("server");
 
-	EXPECT_EQ(keys["host"], "localhost");
+	EXPECT_EQ(keys["host"], "0.0.0.0");
 	EXPECT_EQ(keys["port"], 3502);
 }
 
