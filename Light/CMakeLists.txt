@@ -191,10 +191,9 @@ if(BUILD_TESTS)
 
     get_target_property(GTEST_INCLUDE_DIRS GTest::gtest INTERFACE_INCLUDE_DIRECTORIES)
 
-    add_executable(lightlib_tests
-        tests/main.cpp
-        tests/unit/configuration/config_test.cpp
-    )
+    file(GLOB_RECURSE TEST_SOURCES "tests/*.cpp")
+
+    add_executable(lightlib_tests ${TEST_SOURCES})
 
     target_include_directories(lightlib_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/include
