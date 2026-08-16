@@ -18,7 +18,7 @@ if [ -f "$PROJECT_NAME" ]; then
   mv "./$PROJECT_NAME" "./${PROJECT_NAME}_OLD"
 fi
 
-cmake -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN" -DCMAKE_BUILD_TYPE=$CONFIG "$SOURCE_DIR"
+cmake -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN" -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=$CONFIG "$SOURCE_DIR"
 cmake --build . --config $CONFIG
 if [ $? -ne 0 ]; then
   echo "Build failed"

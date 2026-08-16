@@ -182,7 +182,7 @@ install(
     DESTINATION share/lightlib
 )
 
-option(BUILD_TESTS "Build tests" ON)
+option(BUILD_TESTS "Build tests" OFF)
 
 if(BUILD_TESTS)
     message(STATUS "Building tests")
@@ -194,7 +194,7 @@ if(BUILD_TESTS)
     add_executable(lightlib_tests
         tests/main.cpp
         tests/unit/configuration/config_test.cpp
-    )
+     "tests/unit/routing/routing_test.cpp")
 
     target_include_directories(lightlib_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/include
