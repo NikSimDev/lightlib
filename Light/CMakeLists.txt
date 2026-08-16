@@ -8,9 +8,9 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(WIN32)
-    set(LIGHTLIB_DIR "${CMAKE_SOURCE_DIR}/libs/lightlib/x64-windows")
+    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-windows" CACHE STRING "")
 elseif(UNIX)
-    set(LIGHTLIB_DIR "${CMAKE_SOURCE_DIR}/libs/lightlib/x64-linux")
+    set(CMAKE_PREFIX_PATH "${CMAKE_SOURCE_DIR}/vcpkg_installed/x64-linux" CACHE STRING "")
 endif()
 
 if(WIN32)
