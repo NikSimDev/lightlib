@@ -1,7 +1,6 @@
 {
   "server": {
     "host": "localhost",
-    "host_new": "0.0.0.11",
     "port": 3502
   },
   "app_name": "LightlibApp",

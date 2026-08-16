@@ -24,6 +24,15 @@
 int main(int argc, char** argv) {
 	try {
 		testing::InitGoogleTest(&argc, argv);
+		lightlib::ConfigManager::initGlobal("config_test.json");
+
+		auto server = lightlib::Server(
+			lightlib::global_config->get<std::string>("server.host", "0.0.0.0"),
+			lightlib::global_config->get<unsigned short>("server.port", 8080)
+		);
+
+		server.run();
+
 		return RUN_ALL_TESTS();
 	}
 	catch (std::exception& e) {

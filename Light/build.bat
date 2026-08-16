@@ -23,7 +23,7 @@ if exist "%PROJECT_NAME%.exe" (
     ren "%PROJECT_NAME%.exe" "%PROJECT_NAME%_OLD.exe"
 )
 
-cmake -A x64 -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" %SOURCE_DIR%
+cmake -A x64 -DBUILD_TESTS=ON -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" %SOURCE_DIR%
 cmake --build . --config %CONFIG%
 if %errorlevel% neq 0 (
     echo CMake build failed.
