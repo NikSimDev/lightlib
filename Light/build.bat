@@ -23,18 +23,11 @@ if exist "%PROJECT_NAME%.exe" (
     ren "%PROJECT_NAME%.exe" "%PROJECT_NAME%_OLD.exe"
 )
 
-cmake -A x64 -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" %SOURCE_DIR%
+cmake --preset lightlib -A x64 -DBUILD_TESTS=ON -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" %SOURCE_DIR%
 cmake --build . --config %CONFIG%
 if %errorlevel% neq 0 (
     echo CMake build failed.
     exit /b %errorlevel%
-)
-
-if exist "%SOURCE_DIR%.env" (
-    copy "%SOURCE_DIR%.env" "%CONFIG%\" >nul
-    echo File .env copied to %CONFIG%
-) else (
-    echo Warning: File .env not found in source directory.
 )
 
 if exist "%CONFIG%\%PROJECT_NAME%.exe" (
