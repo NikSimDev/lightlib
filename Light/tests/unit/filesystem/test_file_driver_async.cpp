@@ -26,7 +26,6 @@
 
 namespace fs = std::filesystem;
 
-// Дублируем определение FileDriverTest, чтобы избежать зависимости от другого .cpp
 class FileDriverTest : public TestBase {
 protected:
     void SetUp() override {
