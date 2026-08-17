@@ -1400,7 +1400,7 @@ if (!error.empty()) {
   Include the header:
 
   ```cpp
-  #include <lightlib/App/Http/Helpers/HttpClient.hpp>
+  #include <lightlib/Http>
   ```
   
   All request calls must be performed inside a coroutine launched via `net::co_spawn` or similar.
@@ -1408,7 +1408,7 @@ if (!error.empty()) {
   #### Basic GET Request
 
   ```cpp
-  #include <lightlib/App/Http/Helpers/HttpClient.hpp>
+  #include <lightlib/Http>
   #include <boost/asio/co_spawn.hpp>
   #include <boost/asio/use_awaitable.hpp>
   
