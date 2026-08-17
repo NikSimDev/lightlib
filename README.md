@@ -1375,162 +1375,159 @@ if (!error.empty()) {
 }
 ```
 
-### HttpClient Class - HTTP Requests
+## HttpClient Class — Asynchronous HTTP Requests
+  
+  The `HttpClient` class provides asynchronous methods for performing HTTP/HTTPS requests to external APIs.
+  It is built on **Boost.Beast** and **Boost.Asio** with C++20 coroutine support (`awaitable`). All network
+  operations are non‑blocking, making it suitable for concurrent environments.
+  
+### Public Methods
+  
+  | Method                    | Description                                                                 | Return Type              |
+  |---------------------------|-----------------------------------------------------------------------------|--------------------------|
+  | `get(url, body = json{})` | GET request; `body` is converted to query string                            | `net::awaitable<Response>` |
+  | `post(url, body)`         | POST request with JSON body                                                 | `net::awaitable<Response>` |
+  | `put(url, body)`          | PUT request to update a resource                                            | `net::awaitable<Response>` |
+  | `del(url, body = json{})` | DELETE request; `body` is optional                                          | `net::awaitable<Response>` |
+  | `set_timeout(timeout)`    | Sets timeout (milliseconds) for all operations                              | `void`                   |
+  | `set_verify_ssl(verify)`  | Enable/disable SSL certificate verification (on by default)                 | `void`                   |
+  | `is_success(response)`    | Checks if the response status is 2xx                                        | `bool`                   |
+  
+  ---
+  
+  ### Usage
+  
+  Include the header:
 
-**Purpose**
+  ```cpp
+  #include <lightlib/App/Http/Helpers/HttpClient.hpp>
+  ```
+  
+  All request calls must be performed inside a coroutine launched via `net::co_spawn` or similar.
+  
+  #### Basic GET Request
 
-Make HTTP/HTTPS requests to external APIs with support for GET, POST, PUT, DELETE methods and JSON data.
+  ```cpp
+  #include <lightlib/App/Http/Helpers/HttpClient.hpp>
+  #include <boost/asio/co_spawn.hpp>
+  #include <boost/asio/use_awaitable.hpp>
+  
+  using namespace lightlib;
+  
+  net::awaitable<void> fetch_users() {
+      HttpClient client;
+      nlohmann::json params = {
+          {"page", 1},
+          {"limit", 10}
+      };
+  
+      Response response = co_await client.get("https://api.example.com/users", params);
+  
+      if (client.is_success(response)) {
+          auto users = nlohmann::json::parse(response.body());
+          // process users
+      }
+  }
+  
+  int main() {
+      net::io_context ioc;
+      net::co_spawn(ioc, fetch_users(), net::detached);
+      ioc.run();
+  }
+  ```
+  
+  #### POST Request with JSON Body
 
-|Method	|Description	|Return Type
-|-|-|-
-``get(url, body)``	|Perform HTTP GET request	|``Response``
-``post(url, body)``	|Perform HTTP POST request	|``Response``
-``put(url, body)``	|Perform HTTP PUT request	|``Response``
-``del(url, body)``	|Perform HTTP DELETE request	|``Response``
-``set_timeout(timeout)``	|Set request timeout	|``void``
-``is_success(response)``	|Check if response is successful	|``bool``
+  ```cpp
+  net::awaitable<void> create_user() {
+      HttpClient client;
+  
+      nlohmann::json userData = {
+          {"name", "John Doe"},
+          {"email", "john@example.com"},
+          {"age", 30}
+      };
+  
+      Response response = co_await client.post("https://api.example.com/users", userData);
+  
+      if (response.result() == http::status::created) {
+          auto createdUser = nlohmann::json::parse(response.body());
+          std::cout << "User created with ID: " << createdUser["id"] << std::endl;
+      }
+  }
+  ```
+  
+  #### PUT Request (Update)
 
-#### Usage Examples
+  ```cpp
+  net::awaitable<void> update_user() {
+      HttpClient client;
+  
+      nlohmann::json updateData = {
+          {"name", "Jane Doe"},
+          {"age", 31}
+      };
+  
+      Response response = co_await client.put("https://api.example.com/users/123", updateData);
+  
+      if (client.is_success(response)) {
+          // update successful
+      }
+  }
+  ```
+  
+  #### DELETE Request
 
-**Basic GET request**
+  ```cpp
+  net::awaitable<void> delete_user() {
+      HttpClient client;
+      nlohmann::json emptyBody; // or just {}
+  
+      Response response = co_await client.del("https://api.example.com/users/123", emptyBody);
+  
+      if (response.result() == http::status::no_content) {
+          // user deleted
+      }
+  }
+  ```
+  
+  #### Setting Timeout
 
-```cpp
-#include <lightlib/App/Http/Helpers/HttpClient.hpp>
+  ```cpp
+  net::awaitable<void> fetch_with_timeout() {
+      HttpClient client;
+      client.set_timeout(std::chrono::milliseconds(5000)); // 5 seconds
+  
+      try {
+          Response response = co_await client.get("https://slow-api.example.com/data");
+          // process response
+      } catch (const std::exception& e) {
+          std::cerr << "Error: " << e.what() << std::endl;
+      }
+  }
+  ```
+  
+  #### Disabling SSL Verification (Testing Only)
 
-HttpClient client;
-nlohmann::json body; // Empty for GET
-
-// GET request
-Response response = client.get("https://api.example.com/users");
-
-if (client.is_success(response)) {
-    auto users = nlohmann::json::parse(response.body());
-    // Process users
-}
-```
-
-**POST request with JSON body**
-
-```cpp
-HttpClient client;
-
-nlohmann::json userData = {
-    {"name", "John Doe"},
-    {"email", "john@example.com"},
-    {"age", 30}
-};
-
-Response response = client.post("https://api.example.com/users", userData);
-
-if (response.result() == http::status::created) {
-    auto createdUser = nlohmann::json::parse(response.body());
-    std::cout << "User created with ID: " << createdUser["id"] << std::endl;
-}
-```
-
-**PUT request for update**
-
-```cpp
-HttpClient client;
-
-nlohmann::json updateData = {
-    {"name", "Jane Doe"},
-    {"age", 31}
-};
-
-Response response = client.put("https://api.example.com/users/123", updateData);
-
-if (client.is_success(response)) {
-    // User updated successfully
-}
-```
-
-**DELETE request**
-
-```cpp
-HttpClient client;
-nlohmann::json emptyBody;
-
-Response response = client.del("https://api.example.com/users/123", emptyBody);
-
-if (response.result() == http::status::no_content) {
-    // User deleted successfully
-}
-```
-**GET request with query parameters**
-
-```cpp
-HttpClient client;
-
-nlohmann::json queryParams = {
-    {"page", 1},
-    {"limit", 20},
-    {"sort", "desc"}
-};
-
-// Query parameters will be appended to URL automatically
-Response response = client.get("https://api.example.com/users", queryParams);
-
-auto users = nlohmann::json::parse(response.body());
-for (const auto& user : users["data"]) {
-    std::cout << user["name"] << std::endl;
-}
-```
-
-**Setting timeout**
-```cpp
-HttpClient client;
-client.set_timeout(std::chrono::seconds(60));
-
-// This request will timeout after 60 seconds
-Response response = client.get("https://slow-api.example.com/data");
-```
-
-**Complete API integration example**
-
-```cpp
-class WeatherService {
-private:
-    HttpClient client_;
-    std::string apiKey_;
-    
-public:
-    WeatherService(const std::string& apiKey) : apiKey_(apiKey) {}
-    
-    nlohmann::json getWeather(const std::string& city) {
-        nlohmann::json params = {
-            {"q", city},
-            {"appid", apiKey_},
-            {"units", "metric"}
-        };
-        
-        Response response = client_.get("https://api.openweathermap.org/data/2.5/weather", params);
-        
-        if (client_.is_success(response)) {
-            return nlohmann::json::parse(response.body());
-        }
-        
-        return nlohmann::json();
-    }
-    
-    nlohmann::json getForecast(const std::string& city, int days = 5) {
-        nlohmann::json params = {
-            {"q", city},
-            {"appid", apiKey_},
-            {"units", "metric"},
-            {"cnt", days * 8}
-        };
-        
-        Response response = client_.get("https://api.openweathermap.org/data/2.5/forecast", params);
-        
-        if (client_.is_success(response)) {
-            return nlohmann::json::parse(response.body());
-        }
-        
-        return nlohmann::json();
-    }
-};
-```
+  ```cpp
+  net::awaitable<void> test_self_signed() {
+      HttpClient client;
+      client.set_verify_ssl(false);
+  
+      Response response = co_await client.get("https://self-signed.badssl.com");
+      // ...
+  }
+  ```
+  
+  ### Important Notes
+  
+  - **Coroutines**: all request methods must be called from within a coroutine launched with `net::co_spawn` and the appropriate executor.
+  - **Exceptions**: errors (invalid URL, timeout, DNS, SSL) throw exceptions. Always handle them in your code.
+  - **Thread safety**: `HttpClient` objects are not thread‑safe; use separate instances per thread or synchronise access.
+  - **Headers**: the library automatically adds `Host`, `User‑Agent`, `Accept`, and `Connection: close`. For POST/PUT/DELETE it also sets `Content‑Type: application/json`.
+  - **Timeouts**: apply to each phase (connect, write, read). A timeout throws an exception.
+  
+  ---
 
 ### SmtpClient Class - Email Sending
 
