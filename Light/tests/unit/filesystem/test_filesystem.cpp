@@ -19,66 +19,13 @@
  */
 
 #include <gtest/gtest.h>
-#include <random>
-#include <thread>
-#include <optional>
-#include <boost/asio.hpp>
-#include <boost/asio/co_spawn.hpp>
+#include <filesystem>
 #include "../../../include/lightlib/Filesystem/Filesystem.hpp"
 #include "../../../include/lightlib/Filesystem/FileDriver.hpp"
 #include "../../../include/lightlib/Filesystem/StorageManager.hpp"
+#include "test_utils.hpp"
 
 namespace fs = std::filesystem;
-
-class TestBase : public ::testing::Test {
-protected:
-    fs::path createTempDir() {
-        static std::random_device rd;
-        static std::mt19937 gen(rd());
-        static std::uniform_int_distribution<> dist(100000, 999999);
-        auto tempRoot = fs::temp_directory_path() / ("lightlib_test_" + std::to_string(dist(gen)));
-        fs::create_directories(tempRoot);
-        return tempRoot;
-    }
-
-    template <typename Awaitable>
-    auto runAsync(Awaitable&& awaitable) -> typename std::decay_t<Awaitable>::value_type {
-        boost::asio::io_context ctx;
-        auto work = boost::asio::make_work_guard(ctx);
-        std::thread t([&ctx]() { ctx.run(); });
-
-        using ResultType = typename std::decay_t<Awaitable>::value_type;
-        std::optional<ResultType> result;
-        std::exception_ptr ex;
-
-        boost::asio::co_spawn(ctx, std::forward<Awaitable>(awaitable),
-            [&](std::exception_ptr e, ResultType res) {
-                if (e) ex = e;
-                else result = std::move(res);
-                work.reset();
-            });
-
-        t.join();
-        if (ex) std::rethrow_exception(ex);
-        return std::move(*result);
-    }
-
-    void runAsyncVoid(auto&& awaitable) {
-        boost::asio::io_context ctx;
-        auto work = boost::asio::make_work_guard(ctx);
-        std::thread t([&ctx]() { ctx.run(); });
-
-        std::exception_ptr ex;
-        boost::asio::co_spawn(ctx, std::forward<decltype(awaitable)>(awaitable),
-            [&](std::exception_ptr e) {
-                ex = e;
-                work.reset();
-            });
-
-        t.join();
-        if (ex) std::rethrow_exception(ex);
-    }
-};
 
 class FilesystemTest : public TestBase {
 protected:
@@ -87,7 +34,6 @@ protected:
         driver_ = std::make_shared<lightlib::FileDriver>();
         driver_->setRootPath(tempRoot_.string());
         driver_->initAsync(2);
-
         auto& mgr = lightlib::StorageManager::getInstance();
         for (const auto& name : mgr.getDriverNames()) {
             mgr.unregisterDriver(name);
