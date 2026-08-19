@@ -48,28 +48,35 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # macOS: установить autoconf для libpq
-    - name: Install system dependencies (macOS)
+    # Диагностика – теперь используем bash везде
+    - name: Debug workspace
+      shell: bash
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Contents of root:"
+        ls -la
+        echo "Searching for CMakeLists.txt:"
+        find . -name "CMakeLists.txt"
+        echo "Searching for vcpkg.json:"
+        find . -name "vcpkg.json"
+
+    # На macOS нужен autoconf для libpq
+    - name: Install system dependencies on macOS
       if: runner.os == 'macOS'
       run: brew install autoconf
 
-    # Диагностика: проверить наличие CMakeLists.txt
-    - name: Debug files
-      run: |
-        echo "Current dir: $(pwd)"
-        ls -la
-        find . -name "CMakeLists.txt"
-
+    # Установка vcpkg с явным указанием пути к vcpkg.json
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-        vcpkgJsonGlob: 'Light/vcpkg.json'   # <-- путь к вашему vcpkg.json (в папке Light)
+        vcpkgJsonGlob: 'Light/vcpkg.json'   # если vcpkg.json лежит в папке Light
 
     - name: Set VCPKG_ROOT
       shell: bash
       run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
+    # Конфигурация – исходники в папке Light
     - name: Configure CMake
       run: >
         cmake -B build
@@ -79,8 +86,7 @@ jobs:
         -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}
         -DBUILD_TESTS=ON
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        -DVCPKG_TARGET_TRIPLET=${{ runner.os == 'Windows' && 'x64-windows' || 'x64-linux' || 'x64-osx' }}
-        -S Light   # <--- указываем папку, где лежит CMakeLists.txt
+        -S Light
 
     - name: Build
       run: cmake --build build --config ${{ matrix.build_type }}
