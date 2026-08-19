@@ -225,7 +225,9 @@ if(BUILD_TESTS)
     )
 
     include(GoogleTest)
-    gtest_discover_tests(lightlib_tests)
+    gtest_discover_tests(lightlib_tests
+        TIMEOUT 60
+    )
 
     add_custom_target(check
         COMMAND $<TARGET_FILE:lightlib_tests>
