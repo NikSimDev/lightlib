@@ -73,7 +73,7 @@ jobs:
         -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}
         -DBUILD_TESTS=ON                    # <-- Включаем тесты
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
-        -S ${{ github.workspace }}
+        -S ${{ github.workspace }}/Light
 
     # Сборка
     - name: Build
