@@ -182,7 +182,7 @@ install(
     DESTINATION share/lightlib
 )
 
-option(BUILD_TESTS "Build tests" OFF)
+option(BUILD_TESTS "Build tests" ON)
 
 if(BUILD_TESTS)
     message(STATUS "Building tests")
