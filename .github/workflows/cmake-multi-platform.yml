@@ -13,9 +13,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        compiler: [gcc, clang, cl]
+        compiler: [gcc, clang, cl]          # ось компиляторов
         build_type: [Release, Debug]
-        shared_libs: [ON, OFF]
+        shared_libs: [ON, OFF]              # статическая / динамическая сборка
+
+        # Исключаем невалидные пары (ОС, компилятор)
         exclude:
           - os: windows-latest
             compiler: gcc
@@ -27,6 +29,8 @@ jobs:
             compiler: gcc
           - os: macos-latest
             compiler: cl
+
+        # Для каждой допустимой пары задаём конкретные программы компиляторов
         include:
           - os: ubuntu-latest
             compiler: gcc
@@ -48,6 +52,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # Установка зависимостей через vcpkg
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
@@ -58,6 +63,7 @@ jobs:
       shell: bash
       run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
+    # Конфигурация CMake (передаём все нужные флаги)
     - name: Configure CMake
       run: >
         cmake -B ${{ github.workspace }}/build
@@ -65,20 +71,15 @@ jobs:
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}
+        -DBUILD_TESTS=ON                    # <-- Включаем тесты
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -S ${{ github.workspace }}
 
+    # Сборка
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config ${{ matrix.build_type }}
 
-    # Опционально: проверяем, что библиотека создалась
-    - name: Check library existence
-      shell: bash
-      run: |
-        if [[ "${{ runner.os }}" == "Linux" ]]; then
-          find ${{ github.workspace }}/build -name "liblightlib*.a" -o -name "liblightlib*.so"
-        elif [[ "${{ runner.os }}" == "macOS" ]]; then
-          find ${{ github.workspace }}/build -name "liblightlib*.a" -o -name "liblightlib*.dylib"
-        elif [[ "${{ runner.os }}" == "Windows" ]]; then
-          find ${{ github.workspace }}/build -name "lightlib*.lib" -o -name "lightlib*.dll"
-        fi
+    # Запуск тестов (ctest обнаружит их автоматически)
+    - name: Test
+      working-directory: ${{ github.workspace }}/build
+      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
