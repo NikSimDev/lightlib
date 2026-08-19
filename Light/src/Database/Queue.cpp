@@ -112,7 +112,7 @@ int64_t Queue::length(const std::string& queue_name) {
         throw std::runtime_error("Failed to execute LLEN command.");
     }
 
-    __int64 len = reply->integer;
+    int64_t len = reply->integer;
     freeReplyObject(reply);
     std::cout << "Queue '" << queue_name << "' length: " << len << std::endl;
     return len;
