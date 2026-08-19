@@ -88,6 +88,11 @@ target_include_directories(lightlib_objects PRIVATE
     ${CMAKE_SOURCE_DIR}/App
     ${CMAKE_SOURCE_DIR}/Storage
 )
+target_compile_features(lightlib_objects PUBLIC cxx_std_20)
+target_compile_definitions(lightlib_objects PUBLIC
+    BOOST_ASIO_HAS_CO_AWAIT
+    BOOST_ASIO_HAS_STD_COROUTINE
+)
 
 target_compile_features(lightlib_objects PUBLIC cxx_std_20)
 target_compile_definitions(lightlib_objects PUBLIC
