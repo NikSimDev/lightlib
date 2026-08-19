@@ -224,6 +224,10 @@ if(BUILD_TESTS)
         ${LIBRARIES}
     )
 
+    if(WIN32)
+        set(ENV{PATH} "$ENV{PATH};${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin")
+    endif()
+
     include(GoogleTest)
     gtest_discover_tests(lightlib_tests
         TIMEOUT 60
