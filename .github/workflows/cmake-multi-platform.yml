@@ -48,24 +48,11 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # Диагностика – теперь используем bash везде
-    - name: Debug workspace
-      shell: bash
-      run: |
-        echo "Current directory: $(pwd)"
-        echo "Contents of root:"
-        ls -la
-        echo "Searching for CMakeLists.txt:"
-        find . -name "CMakeLists.txt"
-        echo "Searching for vcpkg.json:"
-        find . -name "vcpkg.json"
-
-    # На macOS нужен autoconf для libpq
     - name: Install system dependencies on macOS
       if: runner.os == 'macOS'
       run: brew install autoconf
 
-    # Установка vcpkg с явным указанием пути к vcpkg.json
+    # ВАЖНО: укажите правильный путь к vcpkg.json
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
@@ -76,7 +63,6 @@ jobs:
       shell: bash
       run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-    # Конфигурация – исходники в папке Light
     - name: Configure CMake
       run: >
         cmake -B build
@@ -91,6 +77,21 @@ jobs:
     - name: Build
       run: cmake --build build --config ${{ matrix.build_type }}
 
-    - name: Test
+    # Копируем все DLL на Windows в папку с тестами (чтобы исполняемый файл нашёл зависимости)
+    - name: Copy DLLs to test directory (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        mkdir -Force build\${{ matrix.build_type }}
+        copy build\vcpkg_installed\x64-windows\bin\*.dll build\${{ matrix.build_type }}\
+      shell: pwsh
+
+    # Прямой запуск тестов (без ctest)
+    - name: Run tests
       working-directory: build
-      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure --timeout 120
+      run: |
+        if [ "${{ runner.os }}" == "Windows" ]; then
+          ./${{ matrix.build_type }}/lightlib_tests.exe
+        else
+          ./${{ matrix.build_type }}/lightlib_tests
+        fi
+      shell: bash
