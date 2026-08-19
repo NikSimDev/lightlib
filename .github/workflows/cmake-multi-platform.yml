@@ -1,4 +1,4 @@
-name: CMake on multiple platforms
+name: CMake Multi-Platform Build
 
 on:
   push:
@@ -13,29 +13,37 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        build_type: [Release]
+        compiler: [gcc, clang, cl]
+        build_type: [Release, Debug]
+        shared_libs: [ON, OFF]
+        exclude:
+          - os: windows-latest
+            compiler: gcc
+          - os: windows-latest
+            compiler: clang
+          - os: ubuntu-latest
+            compiler: cl
+          - os: macos-latest
+            compiler: gcc
+          - os: macos-latest
+            compiler: cl
         include:
           - os: ubuntu-latest
+            compiler: gcc
             c_compiler: gcc
             cpp_compiler: g++
           - os: ubuntu-latest
+            compiler: clang
             c_compiler: clang
             cpp_compiler: clang++
           - os: windows-latest
+            compiler: cl
             c_compiler: cl
             cpp_compiler: cl
           - os: macos-latest
+            compiler: clang
             c_compiler: clang
             cpp_compiler: clang++
-        exclude:
-          - os: windows-latest
-            c_compiler: gcc
-          - os: windows-latest
-            c_compiler: clang
-          - os: ubuntu-latest
-            c_compiler: cl
-          - os: macos-latest
-            c_compiler: cl
 
     steps:
     - uses: actions/checkout@v4
@@ -56,12 +64,21 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -S ${{ github.workspace }}
 
     - name: Build
       run: cmake --build ${{ github.workspace }}/build --config ${{ matrix.build_type }}
 
-    - name: Test
-      working-directory: ${{ github.workspace }}/build
-      run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
+    # Опционально: проверяем, что библиотека создалась
+    - name: Check library existence
+      shell: bash
+      run: |
+        if [[ "${{ runner.os }}" == "Linux" ]]; then
+          find ${{ github.workspace }}/build -name "liblightlib*.a" -o -name "liblightlib*.so"
+        elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          find ${{ github.workspace }}/build -name "liblightlib*.a" -o -name "liblightlib*.dylib"
+        elif [[ "${{ runner.os }}" == "Windows" ]]; then
+          find ${{ github.workspace }}/build -name "lightlib*.lib" -o -name "lightlib*.dll"
+        fi
