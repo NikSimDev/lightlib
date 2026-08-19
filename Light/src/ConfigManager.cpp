@@ -123,8 +123,6 @@ namespace lightlib {
             throw std::runtime_error("Driver is not initialized");
         }
 
-        std::lock_guard<std::mutex> lock(mutex_);
-
         json j = unflattenMap(config_);
         std::string content = j.dump(4);
         driver_->put(configFilePath_, content);
@@ -403,6 +401,16 @@ namespace lightlib {
         configDriver->initAsync();
 
         global_config = std::make_shared<ConfigManager>("config.json", configDriver);
+        global_config->load();
+    }
+
+    void ConfigManager::initGlobal(std::string filepath)
+    {
+        auto configDriver = std::make_shared<lightlib::FileDriver>();
+        configDriver->setRootPath("./");
+        configDriver->initAsync();
+
+        global_config = std::make_shared<ConfigManager>(filepath, configDriver);
         global_config->load();
     }
 

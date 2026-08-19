@@ -113,7 +113,7 @@ namespace lightlib {
             put(path, content);
         }
         catch (const std::exception& e) {
-            throw;
+            throw e;
         }
 
         co_return;
@@ -131,7 +131,7 @@ namespace lightlib {
             result = get(path);
         }
         catch (const std::exception& e) {
-            throw;
+            throw e;
         }
 
         co_return result;

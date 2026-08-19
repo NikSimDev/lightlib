@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2026 Kirill Sergeev, Nikolay Sugonyako, Andrey Agarkov, Gleb Safyannikov
  * SPDX-License-Identifier: LGPL-3.0-or-later
  *
@@ -18,29 +18,21 @@
  * along with lightlib; if not, see <https://www.gnu.org/licenses/>.
  */
 
+#pragma once
+
+#include <gtest/gtest.h>
+#include <memory>
+#include <thread>
+#include <chrono>
+#include <atomic>
 #include "../include/lightlib/Core"
 #include "../include/lightlib/DB"
 #include "../include/lightlib/Http"
 #include "../include/lightlib/Engine.hpp"
 
-int main() {
-    try {
-        lightlib::ConfigManager::initGlobal("config_test.json");
-		lightlib::global_config->setAutoSave(false);
+extern std::shared_ptr<lightlib::Server> g_test_server;
+extern std::atomic<bool> g_server_ready;
+extern std::thread g_server_thread;
 
-        std::string server_host = lightlib::global_config->get("server.host", "0.0.0.0");
-		int server_port = lightlib::global_config->get("server.port", 3502);
-
-        lightlib::Logger::log("server updated host: " + server_host, "INFO");
-        lightlib::Logger::log("server new host: " + std::to_string(server_port), "INFO");
-
-		lightlib::Server server(server_host, server_port);
-		server.run();
-		return 0;
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Fatal error: " << e.what() << std::endl;
-        lightlib::Logger::log(std::string(e.what()), "ERROR");
-        return 1;
-    }
-}
+extern int port_global;
+extern std::string host_global;

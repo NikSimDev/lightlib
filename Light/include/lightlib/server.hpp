@@ -39,7 +39,6 @@
 #include "Database/Queue.hpp"
 #include "Database/Cache.hpp"
 #include "Database/Migrations/MigrationManager.hpp"
-#include "App/Http/Services/AuthService.hpp"
 #include "Router/RouterRegisterer.hpp"
 #include "Router/Router.hpp"
 #include "Engine.hpp"

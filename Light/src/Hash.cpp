@@ -22,7 +22,7 @@
 
 using namespace lightlib;
 
-std::vector<unsigned char> Hash::generateSalt(size_t length) {
+std::vector<unsigned char> Hash::generateSalt(int length) {
     std::vector<unsigned char> salt(length);
     if (RAND_bytes(salt.data(), length) != 1) {
         Logger::log("Failed to generate salt", "ERROR");
