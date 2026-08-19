@@ -52,7 +52,7 @@ jobs:
       if: runner.os == 'macOS'
       run: brew install autoconf
 
-    # Запуск PostgreSQL и Redis только на Linux (через Docker)
+    # Запуск PostgreSQL и Redis только на Linux
     - name: Start PostgreSQL
       if: runner.os == 'Linux'
       run: |
@@ -73,18 +73,16 @@ jobs:
           docker exec redis redis-cli ping && break || sleep 1
         done
 
-    # Установка зависимостей через vcpkg (манифест в корне)
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-        vcpkgJsonGlob: 'Light/vcpkg.json'
+        vcpkgJsonGlob: 'Light/vcpkg.json'   # файл в корне
 
     - name: Set VCPKG_ROOT
       shell: bash
       run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-    # Конфигурация CMake (исходники в папке Light)
     - name: Configure CMake
       run: >
         cmake -B build
@@ -96,40 +94,41 @@ jobs:
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -S Light
 
-    # Сборка
     - name: Build
       run: cmake --build build --config ${{ matrix.build_type }}
 
-    # Копирование DLL на Windows (чтобы тесты находили зависимости)
+    # Копирование DLL на Windows с учётом конфигурации
     - name: Copy DLLs to test directory (Windows)
       if: runner.os == 'Windows'
       run: |
         mkdir -Force build\${{ matrix.build_type }}
-        copy build\vcpkg_installed\x64-windows\bin\*.dll build\${{ matrix.build_type }}\
+        if [ "${{ matrix.build_type }}" == "Release" ]; then
+          copy build\vcpkg_installed\x64-windows\bin\*.dll build\${{ matrix.build_type }}\
+        else
+          copy build\vcpkg_installed\x64-windows\debug\bin\*.dll build\${{ matrix.build_type }}\
+        fi
       shell: pwsh
 
-    # Создание config_test.json в правильном месте
+    # Создание config_test.json для всех платформ
     - name: Create config_test.json
       working-directory: build
       run: |
         echo '{"app_name": "LightlibApp"}' > config_test.json
-        if [ "${{ runner.os }}" == "Windows" ]; then
-          mkdir -p ${{ matrix.build_type }}
-          cp config_test.json ${{ matrix.build_type }}/
-        else
-          mkdir -p ${{ matrix.build_type }}
-          cp config_test.json ${{ matrix.build_type }}/
-        fi
+        mkdir -p ${{ matrix.build_type }}
+        cp config_test.json ${{ matrix.build_type }}/
       shell: bash
 
-    # Запуск тестов (кроме macOS, пока не починим сегфолт)
+    # Запуск тестов:
+    # - Linux: все тесты
+    # - Windows: исключаем только RoutingTest.AddRouteAndGet (ConfigTest'ы теперь должны проходить)
+    # - macOS: исключаем RoutingTest.AddRouteAndGet (остальные проверяем)
     - name: Run tests
-      if: runner.os != 'macOS'
       working-directory: build
       run: |
         if [ "${{ runner.os }}" == "Windows" ]; then
-          ./${{ matrix.build_type }}/lightlib_tests.exe \
-            --gtest_filter=-ConfigTest.GetConfigValue:ConfigTest.ReloadConfig:RoutingTest.AddRouteAndGet
+          ./${{ matrix.build_type }}/lightlib_tests.exe --gtest_filter=-RoutingTest.AddRouteAndGet
+        elif [ "${{ runner.os }}" == "macOS" ]; then
+          ./lightlib_tests --gtest_filter=-RoutingTest.AddRouteAndGet
         else
           ./lightlib_tests
         fi
