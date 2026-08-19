@@ -224,14 +224,10 @@ if(BUILD_TESTS)
         ${LIBRARIES}
     )
 
-    if(WIN32)
-        set(ENV{PATH} "$ENV{PATH};${CMAKE_BINARY_DIR}/vcpkg_installed/x64-windows/bin")
-    endif()
+    # include(GoogleTest)
+    # gtest_discover_tests(lightlib_tests)
 
-    include(GoogleTest)
-    gtest_discover_tests(lightlib_tests
-        TIMEOUT 60
-    )
+    # add_test(NAME lightlib_tests COMMAND lightlib_tests)
 
     add_custom_target(check
         COMMAND $<TARGET_FILE:lightlib_tests>
