@@ -13,11 +13,9 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        compiler: [gcc, clang, cl]          # ось компиляторов
+        compiler: [gcc, clang, cl]
         build_type: [Release, Debug]
-        shared_libs: [ON, OFF]              # статическая / динамическая сборка
-
-        # Исключаем невалидные пары (ОС, компилятор)
+        shared_libs: [ON, OFF]
         exclude:
           - os: windows-latest
             compiler: gcc
@@ -29,8 +27,6 @@ jobs:
             compiler: gcc
           - os: macos-latest
             compiler: cl
-
-        # Для каждой допустимой пары задаём конкретные программы компиляторов
         include:
           - os: ubuntu-latest
             compiler: gcc
@@ -52,34 +48,30 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    # Установка зависимостей через vcpkg
     - name: Setup vcpkg
       uses: lukka/run-vcpkg@v11
       with:
         vcpkgDirectory: '${{ github.workspace }}/vcpkg'
-        vcpkgJsonGlob: 'vcpkg.json'
+        vcpkgJsonGlob: '${{ github.workspace }}/Light/vcpkg.json'   # <-- если vcpkg.json лежит в Light
 
     - name: Set VCPKG_ROOT
       shell: bash
       run: echo "VCPKG_ROOT=${{ github.workspace }}/vcpkg" >> $GITHUB_ENV
 
-    # Конфигурация CMake (передаём все нужные флаги)
     - name: Configure CMake
       run: >
-        cmake -B ${{ github.workspace }}/build
+        cmake -B ${{ github.workspace }}/Light/build
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
         -DBUILD_SHARED_LIBS=${{ matrix.shared_libs }}
-        -DBUILD_TESTS=ON                    # <-- Включаем тесты
+        -DBUILD_TESTS=ON
         -DCMAKE_TOOLCHAIN_FILE=${{ env.VCPKG_ROOT }}/scripts/buildsystems/vcpkg.cmake
         -S ${{ github.workspace }}/Light
 
-    # Сборка
     - name: Build
-      run: cmake --build ${{ github.workspace }}/build --config ${{ matrix.build_type }}
+      run: cmake --build ${{ github.workspace }}/Light/build --config ${{ matrix.build_type }}
 
-    # Запуск тестов (ctest обнаружит их автоматически)
     - name: Test
-      working-directory: ${{ github.workspace }}/build
+      working-directory: ${{ github.workspace }}/Light/build
       run: ctest --build-config ${{ matrix.build_type }} --output-on-failure
