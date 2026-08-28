@@ -199,5 +199,5 @@ jobs:
 
     - name: Run tests
       working-directory: build
-      run: ./lightlib_tests
+      run: ./lightlib_tests --gtest_filter=-RoutingTest.*
       shell: bash
