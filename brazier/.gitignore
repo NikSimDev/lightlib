@@ -7,4 +7,4 @@
 /cmake-build-debug
 .clangd
 config.json
-/certs/
+certs/
