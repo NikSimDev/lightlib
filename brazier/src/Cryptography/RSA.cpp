@@ -357,11 +357,17 @@ namespace brazier::crypto {
     }
 
     std::string RSA::formatPublicKey(const std::string& pem) {
+        
+        size_t start = pem.find_first_not_of(" \t\n\r");
+        if (start == std::string::npos) return "";
+        size_t end = pem.find_last_not_of(" \t\n\r");
+        std::string trimmed = pem.substr(start, end - start + 1);
+
+        
         std::string result;
-        for (char c : pem) {
-            if (c != '\r' && c != '\n' && c != ' ') {
-                result += c;
-            }
+        for (char c : trimmed) {
+            if (c == '\r') continue; 
+            result += c;
         }
         return result;
     }
