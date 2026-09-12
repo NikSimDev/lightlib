@@ -309,8 +309,10 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
         futures.push_back(std::move(future));
     }
 
-    std::thread io_thread([&io]() { io.run(); });
+    std::thread io_thread([&io_context]() { io_context.run(); });
 
+    bool has_failures = false;
+    std::string first_error;
     for (auto& future : futures) {
         try {
             auto response = future.get();
@@ -318,12 +320,19 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
             EXPECT_EQ(response.body(), "TestController show method called");
         }
         catch (const std::exception& e) {
-            FAIL() << "HTTPS request failed: " << e.what();
+            if (!has_failures) {
+                first_error = e.what();
+                has_failures = true;
+            }
         }
     }
 
-    io.stop();
+    io_context.stop();
     io_thread.join();
+
+    if (has_failures) {
+        FAIL() << "HTTPS request failed: " << first_error;
+    }
 }
 
 TEST_F(HttpsRoutingTest, HstsHeaderPresent) {
