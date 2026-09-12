@@ -309,7 +309,7 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
         futures.push_back(std::move(future));
     }
 
-    std::thread io_thread([&io_context]() { io_context.run(); });
+    std::thread io_thread([&io]() { io.run(); });
 
     bool has_failures = false;
     std::string first_error;
@@ -327,7 +327,7 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
         }
     }
 
-    io_context.stop();
+    io.stop();
     io_thread.join();
 
     if (has_failures) {
