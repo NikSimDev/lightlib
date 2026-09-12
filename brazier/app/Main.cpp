@@ -40,7 +40,7 @@ int main() {
 
         if (!https_server.initialize()) return 1;
 
-        https_server.run();   // блокирует, гоняет io_.run() на N потоках
+        https_server.run();  
 
         return 0;
     }

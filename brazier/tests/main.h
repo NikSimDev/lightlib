@@ -37,5 +37,5 @@ extern std::thread g_server_thread;
 extern int port_global;
 extern std::string host_global;
 
-extern std::string https_host_global;
 extern int         https_port_global;
+extern std::string https_host_global;

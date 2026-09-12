@@ -20,12 +20,6 @@
 
 #include "main.h"
 
- // ─────────────────────────────────────────────────────────────
- // Временно: только один сервер за раз.
- // Причина — оба сервера вызывают Logger::init / RouterRegisterer::init /
- // Engine::init, которые не потокобезопасны. Долгосрочное решение — Application
- // с общим io_context. Пока используем переключатели.
- // ─────────────────────────────────────────────────────────────
 constexpr bool kStartHttpServer = false;
 constexpr bool kStartHttpsServer = true;
 
@@ -65,7 +59,7 @@ namespace {
         return false;
     }
 
-} // namespace
+} 
 
 int main(int argc, char** argv) {
     try {
@@ -73,17 +67,14 @@ int main(int argc, char** argv) {
         brazier::ConfigManager::initGlobal("config_test.json");
         brazier::global_config->setAutoSave(false);
 
-        // ── HTTP globals (заполняем всегда — тесты используют их для скипа) ──
         host_global = normalizeHost(
             brazier::global_config->get("server.host", std::string("127.0.0.1")));
         port_global = brazier::global_config->get<int>("server.port", 3502);
 
-        // ── HTTPS globals ──
         https_host_global = normalizeHost(
             brazier::global_config->get("https_server.host", std::string("127.0.0.1")));
         https_port_global = brazier::global_config->get<int>("https_server.port", 8443);
 
-        // ── HTTP server (опционально) ──
         if (kStartHttpServer) {
             g_test_server = std::make_shared<brazier::Server>(host_global, port_global);
             g_server_thread = std::thread([]() {
@@ -107,7 +98,6 @@ int main(int argc, char** argv) {
             }
         }
 
-        // ── HTTPS server (опционально) ──
         if (kStartHttpsServer) {
             g_test_https_server = std::make_shared<brazier::HttpsServer>(
                 https_host_global, https_port_global);
