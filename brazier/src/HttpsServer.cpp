@@ -359,10 +359,6 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 std::chrono::seconds(5),
                 net::redirect_error(net::use_awaitable, ec)));
 
-        beast::error_code ignored;
-        auto& lowest = stream.next_layer();
-        lowest.shutdown(tcp::socket::shutdown_both, ignored);
-        lowest.close(ignored);
     }
     catch (const boost::system::system_error& e) {
         auto code = e.code();

@@ -294,7 +294,6 @@ TEST_F(HttpsRoutingTest, ResponseTime) {
 }
 
 TEST_F(HttpsRoutingTest, MultipleRequests) {
-    auto client = MakeClient();
 
     net::io_context io;
     std::vector<std::future<brazier::Response>> futures;
@@ -303,6 +302,8 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
         auto future = net::co_spawn(
             io,
             [&]() -> net::awaitable<brazier::Response> {
+                brazier::HttpClient client;
+                ConfigureClient(client);
                 co_return co_await client.get(BaseUrl() + "/test");
             },
             net::use_future);

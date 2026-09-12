@@ -316,7 +316,11 @@ namespace brazier {
             throw std::runtime_error("HTTPS read timeout");
         }
 
-        stream.shutdown(ec);
+        ec.clear();
+        co_await stream.async_shutdown(
+            net::cancel_after(
+                std::chrono::seconds(5),
+                net::redirect_error(net::use_awaitable, ec)));
 
         co_return res;
     }
