@@ -100,12 +100,13 @@ jobs:
 
     - name: Generate self-signed certificate
       run: |
-        mkdir -p brazier/app/certs
+        mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout brazier/app/certs/server.key \
-          -out brazier/app/certs/server.crt \
+          -keyout build/brazier/app/certs/server.key \
+          -out build/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+      shell: bash
 
     - name: Run tests
       working-directory: build
@@ -194,12 +195,13 @@ jobs:
 
     - name: Generate self-signed certificate
       run: |
-        mkdir -p brazier/app/certs
+        mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout brazier/app/certs/server.key \
-          -out brazier/app/certs/server.crt \
+          -keyout build/brazier/app/certs/server.key \
+          -out build/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+      shell: bash
 
     - name: Run tests
       working-directory: build
@@ -280,12 +282,13 @@ jobs:
 
     - name: Generate self-signed certificate
       run: |
-        mkdir -p brazier/app/certs
+        mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout brazier/app/certs/server.key \
-          -out brazier/app/certs/server.crt \
+          -keyout build/brazier/app/certs/server.key \
+          -out build/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+      shell: bash
 
     - name: Run tests
       working-directory: build
