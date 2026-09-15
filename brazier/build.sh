@@ -19,7 +19,7 @@ if [ -f "$PROJECT_NAME" ]; then
 fi
 
 cmake -DCMAKE_TOOLCHAIN_FILE="$VCPKG_TOOLCHAIN" -DBUILD_TESTS=ON -DCMAKE_BUILD_TYPE=$CONFIG "$SOURCE_DIR"
-cmake --build . --config $CONFIG
+cmake --build . --config $CONFIG --parallel
 if [ $? -ne 0 ]; then
   echo "Build failed"
   exit

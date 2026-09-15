@@ -60,16 +60,6 @@ add_library(brazier_objects OBJECT ${PROJECT_SOURCES})
 
 target_link_libraries(brazier_objects PUBLIC Boost::boost)
 
-target_include_directories(brazier_objects PRIVATE
-    ${fmt_INCLUDE_DIRS}
-    ${nlohmann_json_INCLUDE_DIRS}
-    ${hiredis_INCLUDE_DIRS}
-    ${ZLIB_INCLUDE_DIRS}
-    ${PostgreSQL_INCLUDE_DIRS}
-    ${OPENSSL_INCLUDE_DIR}
-    ${GTEST_INCLUDE_DIRS}
-)
-
 target_include_directories(brazier_objects PUBLIC
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
     $<INSTALL_INTERFACE:include>
@@ -83,11 +73,6 @@ target_include_directories(brazier_objects PRIVATE
     ${CMAKE_SOURCE_DIR}/App
     ${CMAKE_SOURCE_DIR}/Storage
 )
-target_compile_features(brazier_objects PUBLIC cxx_std_20)
-target_compile_definitions(brazier_objects PUBLIC
-    BOOST_ASIO_HAS_CO_AWAIT
-    BOOST_ASIO_HAS_STD_COROUTINE
-)
 
 target_compile_features(brazier_objects PUBLIC cxx_std_20)
 target_compile_definitions(brazier_objects PUBLIC
@@ -95,9 +80,16 @@ target_compile_definitions(brazier_objects PUBLIC
     BOOST_ASIO_HAS_STD_COROUTINE
 )
 
-set_target_properties(brazier_objects PROPERTIES
-    UNITY_BUILD ON
-    UNITY_BUILD_BATCH_SIZE 8
+target_precompile_headers(brazier_objects PRIVATE
+    <boost/asio.hpp>
+    <boost/beast.hpp>
+    <fmt/format.h>
+    <nlohmann/json.hpp>
+    <openssl/ssl.h>
+    <coroutine>
+    <string>
+    <vector>
+    <memory>
 )
 
 add_library(brazier_static STATIC $<TARGET_OBJECTS:brazier_objects>)
