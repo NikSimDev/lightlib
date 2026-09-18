@@ -311,14 +311,6 @@ namespace brazier {
             }
         }
 
-        {
-            boost::system::error_code shutdown_ec;
-            co_await stream.async_shutdown(
-                net::cancel_after(
-                    std::chrono::seconds(5),
-                    net::redirect_error(net::use_awaitable, shutdown_ec)));
-        }
-
         co_return res;
     }
 

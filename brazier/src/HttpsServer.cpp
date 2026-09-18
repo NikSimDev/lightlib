@@ -308,16 +308,9 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                     net::redirect_error(net::use_awaitable, ec)));
 
             if (ec) {
-                if (ec == http::error::end_of_stream ||
-                    ec == net::error::timed_out ||
-                    ec == net::error::operation_aborted ||
-                    ec == net::error::eof ||
-                    ec == ssl::error::stream_truncated ||
-                    ec == net::error::connection_reset ||
-                    ec == net::error::connection_aborted) {
-                    break;
-                }
-                Logger::log("HTTPS read error: " + ec.message(), "ERROR");
+                // Любая ошибка read (в т.ч. end_of_stream, timeout,
+                // connection reset) — просто выходим из цикла.
+                // Стрим закроется по RAII.
                 break;
             }
 
@@ -342,12 +335,10 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 keep_alive = false;
             }
 
-            if (res.body().empty() &&
-                res.count(http::field::content_length) == 0) {
+            if (res.body().empty() && res.count(http::field::content_length) == 0) {
                 res.content_length(0);
             }
-            else if (!res.body().empty() &&
-                res.count(http::field::content_length) == 0) {
+            else if (!res.body().empty() && res.count(http::field::content_length) == 0) {
                 res.content_length(res.body().size());
             }
             res.prepare_payload();
@@ -358,46 +349,15 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 net::cancel_after(
                     idle_timeout,
                     net::redirect_error(net::use_awaitable, ec)));
-            if (ec) {
-                Logger::log("HTTPS write error: " + ec.message(), "DEBUG");
-                break;
-            }
+            if (ec) break;
 
             buffer.consume(buffer.size());
             if (!keep_alive) break;
         }
 
-        {
-            boost::system::error_code nb_ec;
-            stream.next_layer().non_blocking(true, nb_ec);
-
-            std::array<char, 512> drain_buf;
-            for (int i = 0; i < 50; ++i) {
-                boost::system::error_code drain_ec;
-                auto n = stream.next_layer().receive(
-                    net::buffer(drain_buf), 0, drain_ec);
-                if (drain_ec || n == 0) break;
-            }
-
-            stream.next_layer().non_blocking(false, nb_ec);
-        }
-
-        ec.clear();
-        co_await stream.async_shutdown(
-            net::cancel_after(
-                std::chrono::seconds(5),
-                net::redirect_error(net::use_awaitable, ec)));
-
-        if (ec) {
-            Logger::log("TLS shutdown error: " + ec.message(), "DEBUG");
-        }
-        else {
-            Logger::log("TLS shutdown clean", "DEBUG");
-        }
     }
     catch (const boost::system::system_error& e) {
         auto code = e.code();
-
         if (code == net::error::connection_reset ||
             code == net::error::connection_aborted ||
             code == net::error::eof ||
