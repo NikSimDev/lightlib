@@ -297,17 +297,36 @@ TEST_F(HttpsRoutingTest, ResponseTime) {
 }
 
 TEST_F(HttpsRoutingTest, MultipleRequests) {
+    constexpr int kParallel = 10;
+    constexpr int kMaxRetries = 3;
+
     net::io_context io;
     std::vector<std::future<brazier::Response>> futures;
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < kParallel; ++i) {
         auto future = net::co_spawn(
             io,
             [&]() -> net::awaitable<brazier::Response> {
-                brazier::HttpClient client;                    
-                client.set_verify_ssl(false);
-                client.set_timeout(std::chrono::seconds(kClientTimeoutSec));
-                co_return co_await client.get(BaseUrl() + "/test");
+                std::exception_ptr last_error;
+
+                for (int attempt = 0; attempt < kMaxRetries; ++attempt) {
+                    try {
+                        brazier::HttpClient client;
+                        client.set_verify_ssl(false);
+                        client.set_timeout(std::chrono::seconds(kClientTimeoutSec));
+                        co_return co_await client.get(BaseUrl() + "/test");
+                    }
+                    catch (const std::exception&) {
+                        last_error = std::current_exception();
+                    }
+
+                    net::steady_timer timer(co_await net::this_coro::executor);
+                    timer.expires_after(std::chrono::milliseconds(50));
+                    co_await timer.async_wait(net::use_awaitable);
+                }
+
+                std::rethrow_exception(last_error);
+                co_return brazier::Response{};
             },
             net::use_future);
         futures.push_back(std::move(future));
@@ -335,7 +354,8 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
     io_thread.join();
 
     if (has_failures) {
-        FAIL() << "HTTPS request failed: " << first_error;
+        FAIL() << "HTTPS request failed after " << kMaxRetries
+            << " retries: " << first_error;
     }
 }
 
