@@ -118,6 +118,8 @@ void brazier::HttpsServer::configure_tls() {
         | ssl::context::no_sslv3
         | ssl::context::single_dh_use);
 
+    SSL_CTX_set_options(ssl_ctx_.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
+
     apply_ssl_conf();
 
     ssl_ctx_.use_certificate_chain_file(tls_.cert_file);
@@ -227,11 +229,14 @@ void brazier::HttpsServer::run() {
 
         shutdown_flag_.store(false, std::memory_order_release);
         stats_thread_ = std::thread([this] {
+            std::unique_lock<std::mutex> lock(stats_mutex_);
             while (!shutdown_flag_.load(std::memory_order_acquire)) {
-                std::this_thread::sleep_for(10s);
-                if (shutdown_flag_.load(std::memory_order_acquire)) break;
-                Logger::log(
-                    "HTTPS STATS - Active connections: " +
+                if (stats_cv_.wait_for(lock, 10s, [this] {
+                    return shutdown_flag_.load(std::memory_order_acquire);
+                    })) {
+                    break;
+                }
+                Logger::log("HTTPS STATS - Active connections: " +
                     std::to_string(connection_count_.load()) +
                     ", Total requests: " + std::to_string(total_requests_.load()),
                     "INFO");
@@ -252,6 +257,11 @@ void brazier::HttpsServer::stop() {
     shutdown_flag_.store(true);
     work_guard_.reset();
     io_.stop();
+
+    {
+        std::lock_guard<std::mutex> lock(stats_mutex_);
+        stats_cv_.notify_all();
+    }
 
     if (stats_thread_.joinable()) stats_thread_.join();
     Logger::log("HTTPS server stopped", "INFO");

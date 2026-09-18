@@ -24,8 +24,11 @@
 namespace brazier {
 
     HttpClient::HttpClient() : ctx_(ssl::context::tlsv12_client) {
-        ctx_.set_default_verify_paths();
+        SSL_CTX_set_options(ctx_.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
+        Logger::log("HTTPSC: ctor begin", "DEBUG");
+        //ctx_.set_default_verify_paths();
         ctx_.set_verify_mode(ssl::verify_peer);
+        Logger::log("HTTPSC: ctor end", "DEBUG");
     }
 
     void HttpClient::set_verify_ssl(bool verify) {
@@ -203,6 +206,8 @@ namespace brazier {
         const json& body) {
         auto executor = co_await net::this_coro::executor;
 
+        Logger::log("HTTPSC: enter " + url_parts.host + ":" + url_parts.port, "DEBUG");
+
         beast::ssl_stream<beast::tcp_stream> stream(executor, ctx_);
 
         if (!SSL_set_tlsext_host_name(stream.native_handle(), url_parts.host.c_str())) {
@@ -232,12 +237,16 @@ namespace brazier {
                     net::redirect_error(net::use_awaitable, connect_ec)));
 
             if (connect_ec == net::error::timed_out) {
+                Logger::log("HTTPSC: connect timeout", "DEBUG");
                 throw std::runtime_error("HTTPS connection timeout");
             }
             if (connect_ec) {
+                Logger::log("HTTPSC: connect failed: " + connect_ec.message(), "DEBUG");
                 throw std::runtime_error("Connection failed: " + connect_ec.message());
             }
         }
+
+        Logger::log("HTTPSC: connected", "DEBUG");
 
         {
             boost::system::error_code hs_ec;
@@ -248,12 +257,16 @@ namespace brazier {
                     net::redirect_error(net::use_awaitable, hs_ec)));
 
             if (hs_ec == net::error::timed_out) {
+                Logger::log("HTTPSC: handshake timeout", "DEBUG");
                 throw std::runtime_error("SSL handshake timeout");
             }
             if (hs_ec) {
+                Logger::log("HTTPSC: handshake failed: " + hs_ec.message(), "DEBUG");
                 throw std::runtime_error("SSL handshake failed: " + hs_ec.message());
             }
         }
+
+        Logger::log("HTTPSC: handshake done", "DEBUG");
 
         Request req{ method, url_parts.path, 11 };
         setup_common_headers(req, url_parts.host);
@@ -275,6 +288,9 @@ namespace brazier {
 
         req.prepare_payload();
 
+        Logger::log("HTTPSC: request built, body_size=" +
+            std::to_string(req.body().size()), "DEBUG");
+
         {
             boost::system::error_code write_ec;
             co_await http::async_write(
@@ -284,13 +300,16 @@ namespace brazier {
                     net::redirect_error(net::use_awaitable, write_ec)));
 
             if (write_ec == net::error::timed_out) {
+                Logger::log("HTTPSC: write timeout", "DEBUG");
                 throw std::runtime_error("HTTPS write timeout");
             }
             if (write_ec) {
-                Logger::log("HttpClient: HTTPS write failed: " + write_ec.message(), "ERROR");
+                Logger::log("HTTPSC: write failed: " + write_ec.message(), "ERROR");
                 throw boost::system::system_error(write_ec);
             }
         }
+
+        Logger::log("HTTPSC: write done", "DEBUG");
 
         beast::flat_buffer buffer;
         Response res;
@@ -303,13 +322,55 @@ namespace brazier {
                     net::redirect_error(net::use_awaitable, read_ec)));
 
             if (read_ec == net::error::timed_out) {
+                Logger::log("HTTPSC: read timeout", "DEBUG");
                 throw std::runtime_error("HTTPS read timeout");
             }
             if (read_ec) {
-                Logger::log("HttpClient: HTTPS read failed: " + read_ec.message(), "ERROR");
-                throw boost::system::system_error(read_ec);
+                const bool is_teardown_error =
+                    read_ec == net::error::connection_aborted ||
+                    read_ec == net::error::connection_reset ||
+                    read_ec == ssl::error::stream_truncated ||
+                    read_ec == net::error::eof ||
+                    read_ec == net::error::broken_pipe;
+
+                const bool response_valid =
+                    res.result_int() >= 100 && res.result_int() < 600 &&
+                    res.body().size() == res.payload_size();
+
+                if (is_teardown_error && response_valid) {
+                    Logger::log("HTTPSC: read completed with teardown error (" +
+                        read_ec.message() + "), status=" +
+                        std::to_string(res.result_int()) +
+                        ", body=" + std::to_string(res.body().size()) +
+                        ", using response", "DEBUG");
+                }
+                else {
+                    Logger::log("HTTPSC: read failed: " + read_ec.message() +
+                        ", status=" + std::to_string(res.result_int()) +
+                        ", body=" + std::to_string(res.body().size()),
+                        "ERROR");
+                    throw boost::system::system_error(read_ec);
+                }
             }
         }
+
+        Logger::log("HTTPSC: read done, status=" +
+            std::to_string(res.result_int()) +
+            ", body_size=" + std::to_string(res.body().size()), "DEBUG");
+
+        {
+            boost::system::error_code drain_ec;
+            std::array<char, 512> drain_buf;
+            co_await stream.async_read_some(
+                net::buffer(drain_buf),
+                net::cancel_after(
+                    std::chrono::milliseconds(50),
+                    net::redirect_error(net::use_awaitable, drain_ec)));
+
+            Logger::log("HTTPSC: drain done, ec=" + drain_ec.message(), "DEBUG");
+        }
+
+        Logger::log("HTTPSC: return", "DEBUG");
 
         co_return res;
     }

@@ -46,6 +46,8 @@
 #include <thread>
 #include <utility>                            
 #include <vector>
+#include <condition_variable>
+#include <mutex>
 
 #include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
@@ -86,6 +88,12 @@ namespace brazier {
         ssl::context    ssl_ctx_{ ssl::context::tls_server };
         tcp::acceptor   acceptor_;
 
+        std::thread        stats_thread_;
+        std::atomic<bool>  shutdown_flag_{ false };
+
+        std::mutex              stats_mutex_;
+        std::condition_variable stats_cv_;
+
         unsigned short port_;
         std::string    host_;
 
@@ -95,8 +103,6 @@ namespace brazier {
         std::atomic<int> connection_count_{ 0 };
         std::atomic<int> total_requests_{ 0 };
 
-        std::thread        stats_thread_;
-        std::atomic<bool>  shutdown_flag_{ false };
 
         TlsConfig tls_;
         bool      tls_config_from_user_ = false;
