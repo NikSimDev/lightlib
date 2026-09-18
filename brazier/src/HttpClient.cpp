@@ -198,13 +198,18 @@ namespace brazier {
         co_return res;
     }
 
-    net::awaitable<Response> HttpClient::send_https_request(const UrlParts& url_parts, http::verb method, const json& body) {
+    net::awaitable<Response> HttpClient::send_https_request(const UrlParts& url_parts,
+        http::verb method,
+        const json& body) {
         auto executor = co_await net::this_coro::executor;
 
         beast::ssl_stream<beast::tcp_stream> stream(executor, ctx_);
 
         if (!SSL_set_tlsext_host_name(stream.native_handle(), url_parts.host.c_str())) {
-            boost::system::error_code ec{ static_cast<int>(::ERR_get_error()), net::error::get_ssl_category() };
+            boost::system::error_code ec{
+                static_cast<int>(::ERR_get_error()),
+                net::error::get_ssl_category()
+            };
             throw boost::system::system_error(ec);
         }
 
@@ -212,58 +217,50 @@ namespace brazier {
         auto const results = co_await resolver.async_resolve(
             url_parts.host,
             url_parts.port,
-            net::use_awaitable
-        );
+            net::use_awaitable);
 
         if (results.empty()) {
             throw std::runtime_error("No DNS records found for " + url_parts.host);
         }
 
-        bool timed_out = false;
-        net::steady_timer timer(executor, timeout_);
+        {
+            boost::system::error_code connect_ec;
+            co_await beast::get_lowest_layer(stream).async_connect(
+                results,
+                net::cancel_after(
+                    timeout_,
+                    net::redirect_error(net::use_awaitable, connect_ec)));
 
-        timer.async_wait([&](boost::system::error_code ec) {
-            if (!ec) {
-                timed_out = true;
-                boost::system::error_code ignore;
-                beast::get_lowest_layer(stream).socket().close(ignore);
-                Logger::log("HttpClient: HTTPS connection timeout", "WARNING");
+            if (connect_ec == net::error::timed_out) {
+                throw std::runtime_error("HTTPS connection timeout");
             }
-            });
-
-        boost::system::error_code ec;
-        beast::get_lowest_layer(stream).connect(results, ec);
-        if (ec) {
-            throw std::runtime_error("Connection failed: " + ec.message());
-        }
-        timer.cancel();
-
-        if (timed_out) {
-            throw std::runtime_error("HTTPS connection timeout");
+            if (connect_ec) {
+                throw std::runtime_error("Connection failed: " + connect_ec.message());
+            }
         }
 
-        timed_out = false;
-        timer.expires_after(timeout_);
-        timer.async_wait([&](boost::system::error_code ec) {
-            if (!ec) {
-                timed_out = true;
-                boost::system::error_code ignore;
-                beast::get_lowest_layer(stream).socket().close(ignore);
-                Logger::log("HttpClient: SSL handshake timeout", "WARNING");
+        {
+            boost::system::error_code hs_ec;
+            co_await stream.async_handshake(
+                ssl::stream_base::client,
+                net::cancel_after(
+                    timeout_,
+                    net::redirect_error(net::use_awaitable, hs_ec)));
+
+            if (hs_ec == net::error::timed_out) {
+                throw std::runtime_error("SSL handshake timeout");
             }
-            });
-
-        co_await stream.async_handshake(ssl::stream_base::client, net::use_awaitable);
-        timer.cancel();
-
-        if (timed_out) {
-            throw std::runtime_error("SSL handshake timeout");
+            if (hs_ec) {
+                throw std::runtime_error("SSL handshake failed: " + hs_ec.message());
+            }
         }
 
         Request req{ method, url_parts.path, 11 };
         setup_common_headers(req, url_parts.host);
 
-        if (method == http::verb::post || method == http::verb::put || method == http::verb::delete_) {
+        if (method == http::verb::post ||
+            method == http::verb::put ||
+            method == http::verb::delete_) {
             req.set(http::field::content_type, "application/json");
             if (!body.empty()) {
                 req.body() = body.dump();
@@ -278,49 +275,49 @@ namespace brazier {
 
         req.prepare_payload();
 
-        timed_out = false;
-        timer.expires_after(timeout_);
-        timer.async_wait([&](boost::system::error_code ec) {
-            if (!ec) {
-                timed_out = true;
-                boost::system::error_code ignore;
-                beast::get_lowest_layer(stream).socket().close(ignore);
-                Logger::log("HttpClient: HTTPS write timeout", "WARNING");
+        {
+            boost::system::error_code write_ec;
+            co_await http::async_write(
+                stream, req,
+                net::cancel_after(
+                    timeout_,
+                    net::redirect_error(net::use_awaitable, write_ec)));
+
+            if (write_ec == net::error::timed_out) {
+                throw std::runtime_error("HTTPS write timeout");
             }
-            });
-
-        co_await http::async_write(stream, req, net::use_awaitable);
-        timer.cancel();
-
-        if (timed_out) {
-            throw std::runtime_error("HTTPS write timeout");
+            if (write_ec) {
+                Logger::log("HttpClient: HTTPS write failed: " + write_ec.message(), "ERROR");
+                throw boost::system::system_error(write_ec);
+            }
         }
-
-        timed_out = false;
-        timer.expires_after(timeout_);
-        timer.async_wait([&](boost::system::error_code ec) {
-            if (!ec) {
-                timed_out = true;
-                boost::system::error_code ignore;
-                beast::get_lowest_layer(stream).socket().close(ignore);
-                Logger::log("HttpClient: HTTPS read timeout", "WARNING");
-            }
-            });
 
         beast::flat_buffer buffer;
         Response res;
-        co_await http::async_read(stream, buffer, res, net::use_awaitable);
-        timer.cancel();
+        {
+            boost::system::error_code read_ec;
+            co_await http::async_read(
+                stream, buffer, res,
+                net::cancel_after(
+                    timeout_,
+                    net::redirect_error(net::use_awaitable, read_ec)));
 
-        if (timed_out) {
-            throw std::runtime_error("HTTPS read timeout");
+            if (read_ec == net::error::timed_out) {
+                throw std::runtime_error("HTTPS read timeout");
+            }
+            if (read_ec) {
+                Logger::log("HttpClient: HTTPS read failed: " + read_ec.message(), "ERROR");
+                throw boost::system::system_error(read_ec);
+            }
         }
 
-        ec.clear();
-        co_await stream.async_shutdown(
-            net::cancel_after(
-                std::chrono::seconds(5),
-                net::redirect_error(net::use_awaitable, ec)));
+        {
+            boost::system::error_code shutdown_ec;
+            co_await stream.async_shutdown(
+                net::cancel_after(
+                    std::chrono::seconds(5),
+                    net::redirect_error(net::use_awaitable, shutdown_ec)));
+        }
 
         co_return res;
     }
