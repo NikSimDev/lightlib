@@ -307,12 +307,8 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                     idle_timeout,
                     net::redirect_error(net::use_awaitable, ec)));
 
-            if (ec) {
-                // Любая ошибка read (в т.ч. end_of_stream, timeout,
-                // connection reset) — просто выходим из цикла.
-                // Стрим закроется по RAII.
-                break;
-            }
+            if (ec) break;
+
 
             total_requests_.fetch_add(1, std::memory_order_relaxed);
             keep_alive = req.keep_alive();
@@ -355,6 +351,18 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             if (!keep_alive) break;
         }
 
+        ec.clear();
+        co_await stream.async_shutdown(
+            net::cancel_after(
+                std::chrono::seconds(2),
+                net::redirect_error(net::use_awaitable, ec)));
+
+        if (ec && ec != net::error::eof
+            && ec != net::error::operation_aborted
+            && ec != ssl::error::stream_truncated
+            && ec != net::error::connection_reset) {
+            Logger::log("TLS shutdown error: " + ec.message(), "DEBUG");
+        }
     }
     catch (const boost::system::system_error& e) {
         auto code = e.code();
