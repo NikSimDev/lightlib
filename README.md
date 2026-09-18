@@ -1,6 +1,6 @@
-# lightlib Framework
+# Brazier Framework
 
-lightlib is a modern C++ MVC framework designed for creating high-performance asynchronous APIs.
+Brazier is a modern C++ MVC framework designed for creating high-performance asynchronous APIs.
 The framework combines the power of Boost.Asio with modern C++20/23 features.
 
 ## Features
@@ -22,7 +22,7 @@ The framework combines the power of Boost.Asio with modern C++20/23 features.
 - **vcpkg** (C++ dependency manager)
 - **C++ compiler** with C++20 support (GCC 10+, Clang 10+, MSVC 2019 16.8+)
 - **.env file** with environment configuration
-- **lightlib libraries** (pre-built)
+- **Brazier libraries** (pre-built)
 
 ### **Supported platforms:**
 
@@ -30,39 +30,17 @@ The framework combines the power of Boost.Asio with modern C++20/23 features.
 - **Linux** (Ubuntu 20.04+, CentOS 8+)
 - **macOS** 11+
 
-lightlib **requires** a `.env` file in the project root with the following parameters:
-
-```text
-# Server settings
-S_HOST=127.0.0.1
-S_PORT=3500
-
-# PostgreSQL database
-DB_HOST=127.0.0.1
-DB_PORT=5432
-DB_USERNAME=your_username
-DB_PASSWORD=your_password
-DB_DATABASE=lightlib_db
-
-# Redis for caching and sessions
-REDIS_HOST=127.0.0.1
-REDIS_PORT=6379
-
-# Security
-AUTH_SECRET=your_super_secret_jwt_key_here
-```
-
 ## Project structure
 
 ```text
 your_project/
-├── .env                         # Environment configuration
+├── config.json                  # Environment configuration
 ├── CMakeLists.txt               # Build file
 ├── vcpkg.json                   # vcpkg dependencies
 ├── your_project/
 │   └── Proj.cpp           # Main application file
 ├── libs/
-│   └── lightlib/
+│   └── brazier/
 │       ├── x64-windows/        # Windows libraries
 │       └── x64-linux/          # Linux libraries
 └── include/                    # Header files
@@ -103,33 +81,33 @@ find_package(OpenSSL REQUIRED)
 # Add all the other packages you need here
 
 if(WIN32)
-    set(lightlib_DIR "${CMAKE_SOURCE_DIR}/libs/lightlib/x64-windows")
+    set(brazier_DIR "${CMAKE_SOURCE_DIR}/libs/brazier/x64-windows")
 elseif(UNIX)
-    set(lightlib_DIR "${CMAKE_SOURCE_DIR}/libs/lightlib/x64-linux")
+    set(brazier_DIR "${CMAKE_SOURCE_DIR}/libs/brazier/x64-linux")
 endif()
 
-add_library(lightlib SHARED IMPORTED)
+add_library(brazier SHARED IMPORTED)
 
 if(WIN32)
-    set_target_properties(lightlib PROPERTIES
-        IMPORTED_IMPLIB "${lightlib_DIR}/lib/lightlib.lib"
-        IMPORTED_LOCATION "${lightlib_DIR}/bin/lightlib.dll"
-        INTERFACE_INCLUDE_DIRECTORIES "${lightlib_DIR}/include"
+    set_target_properties(brazier PROPERTIES
+        IMPORTED_IMPLIB "${brazier_DIR}/lib/brazier.lib"
+        IMPORTED_LOCATION "${brazier_DIR}/bin/brazier.dll"
+        INTERFACE_INCLUDE_DIRECTORIES "${brazier_DIR}/include"
     )
 elseif(UNIX)
-    set_target_properties(lightlib PROPERTIES
-        IMPORTED_IMPLIB "${lightlib_DIR}/lib/liblightlib.a"
-        IMPORTED_LOCATION "${lightlib_DIR}/bin/liblightlib.dylib"
-        INTERFACE_INCLUDE_DIRECTORIES "${lightlib_DIR}/include"
+    set_target_properties(brazier PROPERTIES
+        IMPORTED_IMPLIB "${brazier_DIR}/lib/libbrazier.a"
+        IMPORTED_LOCATION "${brazier_DIR}/bin/libbrazier.dylib"
+        INTERFACE_INCLUDE_DIRECTORIES "${brazier_DIR}/include"
     )
 endif()
 
-target_include_directories(lightlib INTERFACE
-    "${lightlib_DIR}"
-    "${lightlib_DIR}/include"
+target_include_directories(brazier INTERFACE
+    "${brazier_DIR}"
+    "${brazier_DIR}/include"
 )
 
-target_link_libraries(lightlib INTERFACE
+target_link_libraries(brazier INTERFACE
     Boost::beast  
     Boost::asio
     Boost::filesystem
@@ -153,7 +131,7 @@ target_link_libraries(lightlib INTERFACE
 )
 
 add_executable(${PROJECT_NAME} ${PROJECT_NAME}/${PROJECT_NAME}.cpp)
-target_link_libraries(${PROJECT_NAME} PRIVATE lightlib)
+target_link_libraries(${PROJECT_NAME} PRIVATE brazier)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/include
@@ -167,18 +145,18 @@ if(WIN32)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
     
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${lightlib_DIR}/bin/lightlib.dll"
+            "${brazier_DIR}/bin/brazier.dll"
             $<TARGET_FILE_DIR:${PROJECT_NAME}>
 
-        COMMENT "Copying lightlib.dll to output directory"
+        COMMENT "Copying brazier.dll to output directory"
     )
 elseif(UNIX)
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-            "${lightlib_DIR}/bin/liblightlib.dylib"
+            "${brazier_DIR}/bin/libbrazier.dylib"
             $<TARGET_FILE_DIR:${PROJECT_NAME}>
 
-        COMMENT "Copying liblightlib.dylib to output directory"
+        COMMENT "Copying libbrazier.dylib to output directory"
     )
 endif()
 ```
@@ -222,11 +200,11 @@ Add all the other packages you need to the end of the list
 sh build.sh
 ```
 
-## lightlib configuration
+## Brazier configuration
 
 ### Overview
 
-`ConfigManager` is a flexible configuration management system in lightlib that provides:
+`ConfigManager` is a flexible configuration management system in brazier that provides:
 - Loading configuration from JSON files
 - Working with nested parameters using dot notation
 - Automatic saving of changes
@@ -259,8 +237,6 @@ sh build.sh
     "host": "127.0.0.1",
     "port": 6379
   },
-  
-  // Filesystem Settings
   "filesystem": {
     "drivers": {
       "local": {
@@ -278,7 +254,7 @@ sh build.sh
 To initialize the global configuration manager, you need to run `ConfigManager::initGlobal()` at the beginning of program execution.
 
 ```cpp
-#include <lightlib/vendor/ConfigManager.hpp>
+#include <brazier/vendor/ConfigManager.hpp>
 
 int main() {
     ConfigManager::initGlobal();
@@ -286,7 +262,7 @@ int main() {
     std::string host = global_config->get("server.host", "127.0.0.1");
     int port = global_config->get("server.port", 3501);
     
-    lightlib::Server server(host, port);
+    brazier::Server server(host, port);
     server.initialize();
     server.run();
     
@@ -312,9 +288,9 @@ config.setAutoSave(true);    // Auto-save on changes
 config.setAutoSave(false);   // Manual save only
 config.clear();              // Clear all values
 ```
-## lightlib Logging System
+## Brazier Logging System
 
-lightlib provides a high-performance logging system with colored output, log rotation, and signal handling.
+Brazier provides a high-performance logging system with colored output, log rotation, and signal handling.
 Logging is done both to file and console with color coding.
 
 
@@ -390,11 +366,11 @@ Logger::log("Security audit", "AUDIT");
 2024-01-15 14:30:27 [ERROR] Connection timeout
 ```
 
-The lightlib logging system is ready for use in production environments and provides all necessary functions for effective application monitoring and debugging.
+The brazier logging system is ready for use in production environments and provides all necessary functions for effective application monitoring and debugging.
 
-## lightlib Routing System
+## Brazier Routing System
 
-lightlib provides a powerful routing system with support for asynchronous handlers, parameterized paths, and CORS.
+Brazier provides a powerful routing system with support for asynchronous handlers, parameterized paths, and CORS.
 The system is built on Boost.Beast and Boost.Asio coroutines.
 
 ### 1. Router
@@ -496,9 +472,9 @@ boost::asio::awaitable<void> createUser(const Request& req, Response& res, const
 }
 ```
 
-## lightlib WebSocket Routing System
+## Brazier WebSocket Routing System
 
-lightlib provides a complete WebSocket routing system with support for parameterized paths, multiple message types, and global handlers. The system integrates seamlessly with the existing HTTP router.
+Brazier provides a complete WebSocket routing system with support for parameterized paths, multiple message types, and global handlers. The system integrates seamlessly with the existing HTTP router.
 
 ### WebSocket Router
 
@@ -714,19 +690,19 @@ Find matching route
 Close and Error: route + global both called
 ```
 
-## Controllers in lightlib Framework
+## Controllers in brazier Framework
 
-Controllers in lightlib are central components that handle HTTP requests and return responses.
+Controllers in brazier are central components that handle HTTP requests and return responses.
 They implement application business logic, work with data models, and form HTTP responses.
 
 ### Base structure
 
 ```cpp
-#include <lightlib/Core>
-#include <lightlib/DB>
-#include <lightlib/Http>
+#include <brazier/Core>
+#include <brazier/DB>
+#include <brazier/Http>
 
-class UserController : public lightlib::Controller {
+class UserController : public brazier::Controller {
 public:
     using Request = http::request<http::string_body>;
     using Response = http::response<http::string_body>;
@@ -763,7 +739,7 @@ You can override the REST methods.
 #### Overriding REST methods:
 
 ```cpp
-class UserController : public lightlib::Controller {
+class UserController : public brazier::Controller {
 public:
     // GET /users/:id - Get single user
     boost::asio::awaitable<void> show(const Request& req, Response& res, const Params& params) override {
@@ -822,7 +798,7 @@ public:
 You can add any number of custom methods beyond the base REST methods:
 
 ```cpp
-class UserController : public lightlib::Controller {
+class UserController : public brazier::Controller {
 public:
     // Custom method - not in base Controller
     boost::asio::awaitable<void> login(const Request& req, Response& res, const Params& params) {
@@ -889,7 +865,7 @@ void Controller::setCorsHeaders(const Request& req, Response& res) {
 #### Overriding CORS for specific controllers
 
 ```cpp
-class ApiController : public lightlib::Controller {
+class ApiController : public brazier::Controller {
 public:
     void setCors(const Request& req, Response& res) override {
         // Restrict to specific origin
@@ -901,7 +877,7 @@ public:
     }
 };
 
-class PublicController : public lightlib::Controller {
+class PublicController : public brazier::Controller {
 public:
     void setCors(const Request& req, Response& res) override {
         // Allow any origin (public API)
@@ -1052,41 +1028,50 @@ boost::asio::awaitable<void> authEndpoint(const Request& req, Response& res, con
 res.result(http::status::ok);
 res.body() = json.dump();
 res.set(http::field::content_type, "application/json");
+res.prepare_payload();
 
 // 201 Created
 res.result(http::status::created);
 res.body() = createdResource.toJson().dump();
 res.set(http::field::location, "/api/users/" + std::to_string(id));
+res.prepare_payload();
 
 // 204 No Content (for DELETE)
 res.result(http::status::no_content);
 res.body() = "";
+res.prepare_payload();
 
 // 400 Bad Request
 res.result(http::status::bad_request);
 res.body() = R"({"error":"Invalid input"})";
+res.prepare_payload();
 
 // 401 Unauthorized
 res.result(http::status::unauthorized);
 res.set(http::field::www_authenticate, "Bearer");
 res.body() = R"({"error":"Authentication required"})";
+res.prepare_payload();
 
 // 403 Forbidden
 res.result(http::status::forbidden);
 res.body() = R"({"error":"Access denied"})";
+res.prepare_payload();
 
 // 404 Not Found
 res.result(http::status::not_found);
 res.body() = R"({"error":"Resource not found"})";
+res.prepare_payload();
 
 // 405 Method Not Allowed
 res.result(http::status::method_not_allowed);
 res.set(http::field::allow, "GET, POST");
 res.body() = R"({"error":"Method not allowed"})";
+res.prepare_payload();
 
 // 500 Internal Server Error
 res.result(http::status::internal_server_error);
 res.body() = R"({"error":"Internal server error"})";
+res.prepare_payload();
 ```
 
 #### Setting custom headers
@@ -1100,9 +1085,9 @@ res.set("X-RateLimit-Limit", "100");
 res.set("X-RateLimit-Remaining", "95");
 ```
 
-## Helpers in lightlib Framework
+## Helpers in brazier Framework
 
-lightlib provides a comprehensive set of utility classes (helpers) for common tasks:
+Brazier provides a comprehensive set of utility classes (helpers) for common tasks:
 - working with cookies; 
 - code generation;
 - data validation; 
@@ -1128,7 +1113,7 @@ Generate random codes for various purposes: verification codes, one-time passwor
 Single code generation
 
 ```cpp
-#include <lightlib/App/Http/Helpers/Code.hpp>
+#include <brazier/App/Http/Helpers/Code.hpp>
 
 // Alphanumeric code (letters + digits)
 std::string verificationCode = Code::generateRandomCode(16);
@@ -1200,7 +1185,7 @@ Simplified HTTP cookie handling: parsing cookies from requests and setting cooki
 **Parsing cookies from request**
 
 ```cpp
-#include <lightlib/App/Http/Helpers/Cookie.hpp>
+#include <brazier/App/Http/Helpers/Cookie.hpp>
 
 boost::asio::awaitable<void> show(const Request& req, Response& res, const Params& params) {
     // Get cookie header from request
@@ -1248,7 +1233,7 @@ boost::asio::awaitable<void> login(const Request& req, Response& res, const Para
 
 **Complete authentication example**
 ```cpp
-class AuthController : public lightlib::Controller {
+class AuthController : public brazier::Controller {
 public:
     boost::asio::awaitable<void> login(const Request& req, Response& res, const Params& params) {
         auto body = nlohmann::json::parse(req.body());
@@ -1314,7 +1299,7 @@ Validate user input data: passwords, email addresses, and other common data type
 **Basic validation**
 
 ```cpp
-#include <lightlib/App/Http/Helpers/Validator.hpp>
+#include <brazier/App/Http/Helpers/Validator.hpp>
 
 // Password validation
 if (Validator::password("MySecure123!")) {
@@ -1390,162 +1375,159 @@ if (!error.empty()) {
 }
 ```
 
-### HttpClient Class - HTTP Requests
+## HttpClient Class — Asynchronous HTTP Requests
+  
+  The `HttpClient` class provides asynchronous methods for performing HTTP/HTTPS requests to external APIs.
+  It is built on **Boost.Beast** and **Boost.Asio** with C++20 coroutine support (`awaitable`). All network
+  operations are non‑blocking, making it suitable for concurrent environments.
+  
+### Public Methods
+  
+  | Method                    | Description                                                                 | Return Type              |
+  |---------------------------|-----------------------------------------------------------------------------|--------------------------|
+  | `get(url, body = json{})` | GET request; `body` is converted to query string                            | `net::awaitable<Response>` |
+  | `post(url, body)`         | POST request with JSON body                                                 | `net::awaitable<Response>` |
+  | `put(url, body)`          | PUT request to update a resource                                            | `net::awaitable<Response>` |
+  | `del(url, body = json{})` | DELETE request; `body` is optional                                          | `net::awaitable<Response>` |
+  | `set_timeout(timeout)`    | Sets timeout (milliseconds) for all operations                              | `void`                   |
+  | `set_verify_ssl(verify)`  | Enable/disable SSL certificate verification (on by default)                 | `void`                   |
+  | `is_success(response)`    | Checks if the response status is 2xx                                        | `bool`                   |
+  
+  ---
+  
+  ### Usage
+  
+  Include the header:
 
-**Purpose**
+  ```cpp
+  #include <brazier/Http>
+  ```
+  
+  All request calls must be performed inside a coroutine launched via `net::co_spawn` or similar.
+  
+  #### Basic GET Request
 
-Make HTTP/HTTPS requests to external APIs with support for GET, POST, PUT, DELETE methods and JSON data.
+  ```cpp
+  #include <brazier/Http>
+  #include <boost/asio/co_spawn.hpp>
+  #include <boost/asio/use_awaitable.hpp>
+  
+  using namespace brazier;
+  
+  net::awaitable<void> fetch_users() {
+      HttpClient client;
+      nlohmann::json params = {
+          {"page", 1},
+          {"limit", 10}
+      };
+  
+      Response response = co_await client.get("https://api.example.com/users", params);
+  
+      if (client.is_success(response)) {
+          auto users = nlohmann::json::parse(response.body());
+          // process users
+      }
+  }
+  
+  int main() {
+      net::io_context ioc;
+      net::co_spawn(ioc, fetch_users(), net::detached);
+      ioc.run();
+  }
+  ```
+  
+  #### POST Request with JSON Body
 
-|Method	|Description	|Return Type
-|-|-|-
-``get(url, body)``	|Perform HTTP GET request	|``Response``
-``post(url, body)``	|Perform HTTP POST request	|``Response``
-``put(url, body)``	|Perform HTTP PUT request	|``Response``
-``del(url, body)``	|Perform HTTP DELETE request	|``Response``
-``set_timeout(timeout)``	|Set request timeout	|``void``
-``is_success(response)``	|Check if response is successful	|``bool``
+  ```cpp
+  net::awaitable<void> create_user() {
+      HttpClient client;
+  
+      nlohmann::json userData = {
+          {"name", "John Doe"},
+          {"email", "john@example.com"},
+          {"age", 30}
+      };
+  
+      Response response = co_await client.post("https://api.example.com/users", userData);
+  
+      if (response.result() == http::status::created) {
+          auto createdUser = nlohmann::json::parse(response.body());
+          std::cout << "User created with ID: " << createdUser["id"] << std::endl;
+      }
+  }
+  ```
+  
+  #### PUT Request (Update)
 
-#### Usage Examples
+  ```cpp
+  net::awaitable<void> update_user() {
+      HttpClient client;
+  
+      nlohmann::json updateData = {
+          {"name", "Jane Doe"},
+          {"age", 31}
+      };
+  
+      Response response = co_await client.put("https://api.example.com/users/123", updateData);
+  
+      if (client.is_success(response)) {
+          // update successful
+      }
+  }
+  ```
+  
+  #### DELETE Request
 
-**Basic GET request**
+  ```cpp
+  net::awaitable<void> delete_user() {
+      HttpClient client;
+      nlohmann::json emptyBody; // or just {}
+  
+      Response response = co_await client.del("https://api.example.com/users/123", emptyBody);
+  
+      if (response.result() == http::status::no_content) {
+          // user deleted
+      }
+  }
+  ```
+  
+  #### Setting Timeout
 
-```cpp
-#include <lightlib/App/Http/Helpers/HttpClient.hpp>
+  ```cpp
+  net::awaitable<void> fetch_with_timeout() {
+      HttpClient client;
+      client.set_timeout(std::chrono::milliseconds(5000)); // 5 seconds
+  
+      try {
+          Response response = co_await client.get("https://slow-api.example.com/data");
+          // process response
+      } catch (const std::exception& e) {
+          std::cerr << "Error: " << e.what() << std::endl;
+      }
+  }
+  ```
+  
+  #### Disabling SSL Verification (Testing Only)
 
-HttpClient client;
-nlohmann::json body; // Empty for GET
-
-// GET request
-Response response = client.get("https://api.example.com/users");
-
-if (client.is_success(response)) {
-    auto users = nlohmann::json::parse(response.body());
-    // Process users
-}
-```
-
-**POST request with JSON body**
-
-```cpp
-HttpClient client;
-
-nlohmann::json userData = {
-    {"name", "John Doe"},
-    {"email", "john@example.com"},
-    {"age", 30}
-};
-
-Response response = client.post("https://api.example.com/users", userData);
-
-if (response.result() == http::status::created) {
-    auto createdUser = nlohmann::json::parse(response.body());
-    std::cout << "User created with ID: " << createdUser["id"] << std::endl;
-}
-```
-
-**PUT request for update**
-
-```cpp
-HttpClient client;
-
-nlohmann::json updateData = {
-    {"name", "Jane Doe"},
-    {"age", 31}
-};
-
-Response response = client.put("https://api.example.com/users/123", updateData);
-
-if (client.is_success(response)) {
-    // User updated successfully
-}
-```
-
-**DELETE request**
-
-```cpp
-HttpClient client;
-nlohmann::json emptyBody;
-
-Response response = client.del("https://api.example.com/users/123", emptyBody);
-
-if (response.result() == http::status::no_content) {
-    // User deleted successfully
-}
-```
-**GET request with query parameters**
-
-```cpp
-HttpClient client;
-
-nlohmann::json queryParams = {
-    {"page", 1},
-    {"limit", 20},
-    {"sort", "desc"}
-};
-
-// Query parameters will be appended to URL automatically
-Response response = client.get("https://api.example.com/users", queryParams);
-
-auto users = nlohmann::json::parse(response.body());
-for (const auto& user : users["data"]) {
-    std::cout << user["name"] << std::endl;
-}
-```
-
-**Setting timeout**
-```cpp
-HttpClient client;
-client.set_timeout(std::chrono::seconds(60));
-
-// This request will timeout after 60 seconds
-Response response = client.get("https://slow-api.example.com/data");
-```
-
-**Complete API integration example**
-
-```cpp
-class WeatherService {
-private:
-    HttpClient client_;
-    std::string apiKey_;
-    
-public:
-    WeatherService(const std::string& apiKey) : apiKey_(apiKey) {}
-    
-    nlohmann::json getWeather(const std::string& city) {
-        nlohmann::json params = {
-            {"q", city},
-            {"appid", apiKey_},
-            {"units", "metric"}
-        };
-        
-        Response response = client_.get("https://api.openweathermap.org/data/2.5/weather", params);
-        
-        if (client_.is_success(response)) {
-            return nlohmann::json::parse(response.body());
-        }
-        
-        return nlohmann::json();
-    }
-    
-    nlohmann::json getForecast(const std::string& city, int days = 5) {
-        nlohmann::json params = {
-            {"q", city},
-            {"appid", apiKey_},
-            {"units", "metric"},
-            {"cnt", days * 8}
-        };
-        
-        Response response = client_.get("https://api.openweathermap.org/data/2.5/forecast", params);
-        
-        if (client_.is_success(response)) {
-            return nlohmann::json::parse(response.body());
-        }
-        
-        return nlohmann::json();
-    }
-};
-```
+  ```cpp
+  net::awaitable<void> test_self_signed() {
+      HttpClient client;
+      client.set_verify_ssl(false);
+  
+      Response response = co_await client.get("https://self-signed.badssl.com");
+      // ...
+  }
+  ```
+  
+  ### Important Notes
+  
+  - **Coroutines**: all request methods must be called from within a coroutine launched with `net::co_spawn` and the appropriate executor.
+  - **Exceptions**: errors (invalid URL, timeout, DNS, SSL) throw exceptions. Always handle them in your code.
+  - **Thread safety**: `HttpClient` objects are not thread‑safe; use separate instances per thread or synchronise access.
+  - **Headers**: the library automatically adds `Host`, `User‑Agent`, `Accept`, and `Connection: close`. For POST/PUT/DELETE it also sets `Content‑Type: application/json`.
+  - **Timeouts**: apply to each phase (connect, write, read). A timeout throws an exception.
+  
+  ---
 
 ### SmtpClient Class - Email Sending
 
@@ -1574,7 +1556,7 @@ The SmtpClient uses environment variables for configuration:
 **Basic email sending**
 
 ```cpp
-#include <lightlib/App/Http/Helpers/SmtpClient.hpp>
+#include <brazier/App/Http/Helpers/SmtpClient.hpp>
 
 boost::asio::awaitable<void> sendEmail(const Request& req, Response& res, const Params& params) {
     SmtpClient smtp;
@@ -1647,7 +1629,7 @@ boost::asio::awaitable<void> sendVerificationEmail(const std::string& email, con
 **Complete registration with email**
 
 ```cpp
-class AuthController : public lightlib::Controller {
+class AuthController : public brazier::Controller {
 public:
     boost::asio::awaitable<void> register(const Request& req, Response& res, const Params& params) {
         auto body = nlohmann::json::parse(req.body());

@@ -381,3 +381,4 @@ FodyWeavers.xsd
 Light/.DS_Store
 *.DS_Store
 dump.rdb
+cmake-build-debug
