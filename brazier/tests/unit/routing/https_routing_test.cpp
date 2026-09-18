@@ -170,6 +170,17 @@ bool TryConnectWithTlsVersion(int version) {
 
 class HttpsRoutingTest : public ::testing::Test {
 protected:
+    static void SetUpTestSuite() {
+        auto test_controller = std::make_shared<TestController>();
+
+        R(GET, "/test", test_controller, show);
+        R(GET, "/test/json", test_controller, json_response);
+        R(POST, "/test/echo", test_controller, echo_post);
+
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kRouteRegistrationDelayMs));
+    }
+
     void SetUp() override {
         if (!IsHttpsServerReady()) {
             GTEST_SKIP() << "HTTPS server is not running on "
@@ -186,14 +197,6 @@ protected:
 };
 
 TEST_F(HttpsRoutingTest, AddRouteAndGet) {
-    auto test_controller = std::make_shared<TestController>();
-    R(GET, "/test", test_controller, show);
-    R(GET, "/test/json", test_controller, json_response);
-    R(POST, "/test/echo", test_controller, echo_post);
-
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(kRouteRegistrationDelayMs));
-
     auto client = MakeClient();
 
     try {
