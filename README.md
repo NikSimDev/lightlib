@@ -1087,7 +1087,7 @@ res.set("X-RateLimit-Remaining", "95");
 ## Collections
 A convenience container that extends std::vector<std::shared_ptr<ModelType>> with helper methods for common collection operations — persistence, deletion, JSON serialization, and functional-style querying.
 
-It is designed to work with model classes that follow the brazier ORM conventions (specifically, a static saveMany(...) method and instance methods delete_() / toJson()).
+It is designed to work with model classes that follow the brazier ORM conventions (specifically, a static `saveMany(...)` method and instance methods `delete_()` / `toJson()`).
 
 ```cpp
 #include <brazier/DB>
@@ -1112,7 +1112,7 @@ Persists the entire collection by delegating to `ModelType::saveMany(*this)`.
 
 Returns true on success, false on failure.
 
-Returns false immediately (without calling saveMany) if the collection is empty.
+Returns false immediately (without calling `saveMany`) if the collection is empty.
 
 ```cpp
 Collection<User> users;
@@ -1128,17 +1128,17 @@ Note: The exact semantics of saveMany are defined by your model. Collection only
 
 `bool delete_()`
 
-Deletes every model in the collection by calling item->delete_() on each element.
+Deletes every model in the collection by calling `item->delete_()` on each element.
 
 Iterates over the whole collection, continuing on error.
 
-If an individual delete_() throws, the exception is logged via
-Logger::log(..., "ERROR") and the loop continues with the next item.
+If an individual `delete_()` throws, the exception is logged via
+`Logger::log(..., "ERROR")` and the loop continues with the next item.
 
 Returns true only if all deletions succeeded; false if the collection
 is empty or any item failed.
 
-The trailing underscore in delete_ avoids clashing with the C++ keyword delete.
+The trailing underscore in `delete_` avoids clashing with the C++ keyword delete.
 
 ```cpp
 Collection<User> users = User::where("inactive = true");
@@ -1151,7 +1151,7 @@ if (!ok) {
 
 `json toJson() const`
 
-Returns a nlohmann::json array where each element is the result of item->toJson().
+Returns a nlohmann::json array where each element is the result of `item->toJson()`.
 
 ```cpp
 Collection<User> users = ...;
@@ -1176,7 +1176,7 @@ ___
 
 Returns a new Collection containing only the elements for which predicate returns true.
 ___
-```
+```cpp
 auto admins = users.filter([](auto u) { return u->isAdmin(); });
 
 bool all(predicate) const
@@ -1184,7 +1184,7 @@ bool all(predicate) const
 
 Returns true if the predicate holds for every element. Returns true for an empty collection (vacuous truth, matching std::all_of).
 ___
-```
+```cpp
 bool everyoneActive = users.all([](auto u) { return u->active; });
 
 bool any(predicate) const
@@ -1194,7 +1194,7 @@ Returns true if the predicate holds for at least one element. Returns false for 
 
 ___
 
-```
+```cpp
 bool hasAdmin = users.any([](auto u) { return u->isAdmin(); });
 
 std::shared_ptr<ModelType> find(predicate) const
