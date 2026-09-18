@@ -315,8 +315,15 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 break;
             }
             if (ec) {
-                if (ec == net::error::operation_aborted) break;
-                throw boost::system::system_error(ec);
+                if (ec == net::error::operation_aborted ||
+                    ec == net::error::eof ||
+                    ec == ssl::error::stream_truncated ||
+                    ec == net::error::connection_reset ||
+                    ec == net::error::connection_aborted) {
+                    break;
+                }
+                Logger::log("HTTPS read error: " + ec.message(), "ERROR");
+                break;
             }
 
             total_requests_.fetch_add(1, std::memory_order_relaxed);
