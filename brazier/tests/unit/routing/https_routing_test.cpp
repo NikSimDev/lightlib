@@ -285,8 +285,7 @@ TEST_F(HttpsRoutingTest, ResponseTime) {
             });
 
         auto end = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            end - start);
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         EXPECT_EQ(response.result_int(), 200);
         EXPECT_LT(duration.count(), kMaxResponseTimeMs);
