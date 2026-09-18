@@ -301,7 +301,7 @@ TEST_F(HttpsRoutingTest, MultipleRequests) {
         auto future = net::co_spawn(
             io,
             [&]() -> net::awaitable<brazier::Response> {
-                brazier::HttpClient client;
+                brazier::HttpClient client;                    
                 client.set_verify_ssl(false);
                 client.set_timeout(std::chrono::seconds(kClientTimeoutSec));
                 co_return co_await client.get(BaseUrl() + "/test");
