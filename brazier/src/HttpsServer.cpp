@@ -359,6 +359,13 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 std::chrono::seconds(5),
                 net::redirect_error(net::use_awaitable, ec)));
 
+        if (ec) {
+            Logger::log("TLS shutdown error: " + ec.message(), "DEBUG");
+        }
+        else {
+            Logger::log("TLS shutdown clean", "DEBUG");
+        }
+
     }
     catch (const boost::system::system_error& e) {
         auto code = e.code();
