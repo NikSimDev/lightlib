@@ -353,6 +353,21 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             if (!keep_alive) break;
         }
 
+        {
+            boost::system::error_code nb_ec;
+            stream.next_layer().non_blocking(true, nb_ec);
+
+            std::array<char, 512> drain_buf;
+            for (int i = 0; i < 50; ++i) {
+                boost::system::error_code drain_ec;
+                auto n = stream.next_layer().receive(
+                    net::buffer(drain_buf), 0, drain_ec);
+                if (drain_ec || n == 0) break;
+            }
+
+            stream.next_layer().non_blocking(false, nb_ec);
+        }
+
         ec.clear();
         co_await stream.async_shutdown(
             net::cancel_after(
