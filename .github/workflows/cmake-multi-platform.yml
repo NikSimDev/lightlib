@@ -88,7 +88,7 @@ jobs:
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
-              "handshake_timeout": 3,
+              "handshake_timeout": 15,
               "conf": []
             }
           }
@@ -183,7 +183,7 @@ jobs:
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
-              "handshake_timeout": 3,
+              "handshake_timeout": 15,
               "conf": []
             }
           }
@@ -270,7 +270,7 @@ jobs:
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
-              "handshake_timeout": 3,
+              "handshake_timeout": 15,
               "conf": []
             }
           }
