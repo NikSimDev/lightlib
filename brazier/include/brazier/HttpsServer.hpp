@@ -39,6 +39,7 @@
 #include <openssl/err.h>
 
 #include <atomic>
+#include <array>
 #include <chrono>
 #include <memory>
 #include <string>

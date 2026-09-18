@@ -40,7 +40,6 @@ void brazier::HttpsServer::setTlsConfig(const TlsConfig& tls) {
     tls_config_from_user_ = true;
 }
 
-
 void brazier::HttpsServer::load_tls_config_from_global() {
     if (tls_config_from_user_) return;
 
@@ -138,7 +137,6 @@ void brazier::HttpsServer::configure_tls() {
         ssl_ctx_.set_verify_mode(ssl::verify_none);
     }
 }
-
 
 bool brazier::HttpsServer::initialize() {
     try {
@@ -309,13 +307,10 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                     idle_timeout,
                     net::redirect_error(net::use_awaitable, ec)));
 
-            if (ec == http::error::end_of_stream) break;
-            if (ec == net::error::timed_out) {
-                Logger::log("HTTPS idle timeout, closing connection", "INFO");
-                break;
-            }
             if (ec) {
-                if (ec == net::error::operation_aborted ||
+                if (ec == http::error::end_of_stream ||
+                    ec == net::error::timed_out ||
+                    ec == net::error::operation_aborted ||
                     ec == net::error::eof ||
                     ec == ssl::error::stream_truncated ||
                     ec == net::error::connection_reset ||
@@ -336,7 +331,16 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             res.set(http::field::server, "brazier");
             res.set(http::field::strict_transport_security, "max-age=31536000");
 
-            co_await Router::handle_request(req, res);
+            try {
+                co_await Router::handle_request(req, res);
+            }
+            catch (const std::exception& e) {
+                Logger::log("Router error: " + std::string(e.what()), "ERROR");
+                res.result(http::status::internal_server_error);
+                res.set(http::field::content_type, "application/json");
+                res.body() = R"({"error":"internal server error"})";
+                keep_alive = false;
+            }
 
             if (res.body().empty() &&
                 res.count(http::field::content_length) == 0) {
@@ -354,7 +358,10 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 net::cancel_after(
                     idle_timeout,
                     net::redirect_error(net::use_awaitable, ec)));
-            if (ec) break;
+            if (ec) {
+                Logger::log("HTTPS write error: " + ec.message(), "DEBUG");
+                break;
+            }
 
             buffer.consume(buffer.size());
             if (!keep_alive) break;
@@ -387,17 +394,16 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
         else {
             Logger::log("TLS shutdown clean", "DEBUG");
         }
-
     }
     catch (const boost::system::system_error& e) {
         auto code = e.code();
 
         if (code == net::error::connection_reset ||
             code == net::error::connection_aborted ||
-            code == net::error::eof ||                     
-            code == net::error::operation_aborted ||      
-            code == net::error::broken_pipe ||             
-            code == ssl::error::stream_truncated) {        
+            code == net::error::eof ||
+            code == net::error::operation_aborted ||
+            code == net::error::broken_pipe ||
+            code == ssl::error::stream_truncated) {
             Logger::log("HTTPS client disconnected", "DEBUG");
         }
         else {
