@@ -332,10 +332,11 @@ namespace brazier {
                     read_ec == ssl::error::stream_truncated ||
                     read_ec == net::error::eof ||
                     read_ec == net::error::broken_pipe;
-
+                const auto payload = res.payload_size();
                 const bool response_valid =
                     res.result_int() >= 100 && res.result_int() < 600 &&
-                    res.body().size() == res.payload_size();
+                    payload.has_value() &&
+                    res.body().size() == static_cast<std::size_t>(*payload);
 
                 if (is_teardown_error && response_valid) {
                     Logger::log("HTTPSC: read completed with teardown error (" +
