@@ -7,3 +7,5 @@
 /cmake-build-debug
 .clangd
 config.json
+certs/
+stress_logs/

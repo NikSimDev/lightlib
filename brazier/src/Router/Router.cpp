@@ -31,8 +31,9 @@ boost::asio::awaitable<void> Router::handle_request(const Request& req, Response
     auto method = req.method();
     std::string target = std::string(req.target());
 
-    if (routes_.find(method) != routes_.end()) {
-        for (const auto& route : routes_[method]) {
+    auto method_it = routes_.find(method);
+    if (method_it != routes_.end()) {
+        for (const auto& route : method_it->second) {
             Params params;
             if (route.match(target, params)) {
                 co_await route.process(req, res, params);
