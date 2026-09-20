@@ -79,8 +79,8 @@ jobs:
             "host": "0.0.0.0",
             "port": 8443,
             "tls": {
-              "cert_file": "app/certs/server.crt",
-              "key_file": "app/certs/server.key",
+              "cert_file": "brazier/app/certs/server.crt",
+              "key_file": "brazier/app/certs/server.key",
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
@@ -103,8 +103,8 @@ jobs:
       run: |
         mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout build/brazier/app/certs/server.key \
-          -out build/brazier/app/certs/server.crt \
+          -keyout build/brazier/brazier/app/certs/server.key \
+          -out build/brazier/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
       shell: bash
@@ -175,8 +175,8 @@ jobs:
             "host": "0.0.0.0",
             "port": 8443,
             "tls": {
-              "cert_file": "app/certs/server.crt",
-              "key_file": "app/certs/server.key",
+              "cert_file": "brazier/app/certs/server.crt",
+              "key_file": "brazier/app/certs/server.key",
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
@@ -200,8 +200,8 @@ jobs:
       run: |
         New-Item -ItemType Directory -Force -Path "build/brazier/app/certs" | Out-Null
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes `
-          -keyout "build/brazier/app/certs/server.key" `
-          -out "build/brazier/app/certs/server.crt" `
+          -keyout "build/brazier/brazier/app/certs/server.key" `
+          -out "build/brazier/brazier/app/certs/server.crt" `
           -subj "/CN=localhost" `
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
@@ -263,8 +263,8 @@ jobs:
             "host": "0.0.0.0",
             "port": 8443,
             "tls": {
-              "cert_file": "app/certs/server.crt",
-              "key_file": "app/certs/server.key",
+              "cert_file": "brazier/app/certs/server.crt",
+              "key_file": "brazier/app/certs/server.key",
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
@@ -287,8 +287,8 @@ jobs:
       run: |
         mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout build/brazier/app/certs/server.key \
-          -out build/brazier/app/certs/server.crt \
+          -keyout build/brazier/brazier/app/certs/server.key \
+          -out build/brazier/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
       shell: bash
