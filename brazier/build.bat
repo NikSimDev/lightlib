@@ -24,7 +24,7 @@ if exist "%PROJECT_NAME%.exe" (
 )
 
 cmake --preset brazier -A x64 -DBUILD_TESTS=ON -DCMAKE_TOOLCHAIN_FILE="%VCPKG_TOOLCHAIN%" %SOURCE_DIR%
-cmake --build . --config %CONFIG%
+cmake --build . --config %CONFIG% --parallel
 if %errorlevel% neq 0 (
     echo CMake build failed.
     exit /b %errorlevel%
