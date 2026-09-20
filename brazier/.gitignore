@@ -8,3 +8,4 @@
 .clangd
 config.json
 certs/
+stress_logs/

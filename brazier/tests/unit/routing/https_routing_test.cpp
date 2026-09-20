@@ -67,8 +67,7 @@ public:
     using Request = http::request<http::string_body>;
     using Response = http::response<http::string_body>;
 
-    net::awaitable<void> show(const Request& req, Response& res,
-        const Params& params) override {
+    net::awaitable<void> show(const Request& req, Response& res, const Params& params) override {
         res.result(http::status::ok);
         res.set(http::field::content_type, "text/plain");
         res.body() = "TestController show method called";
@@ -112,6 +111,10 @@ bool IsHttpsServerReady() {
             std::to_string(https_port_global));
         net::connect(stream.next_layer(), results);
         stream.handshake(ssl::stream_base::client);
+
+        boost::system::error_code ec;
+        stream.shutdown(ec);
+
         return true;
     }
     catch (...) {
@@ -170,6 +173,17 @@ bool TryConnectWithTlsVersion(int version) {
 
 class HttpsRoutingTest : public ::testing::Test {
 protected:
+    static void SetUpTestSuite() {
+        auto test_controller = std::make_shared<TestController>();
+
+        R(GET, "/test", test_controller, show);
+        R(GET, "/test/json", test_controller, json_response);
+        R(POST, "/test/echo", test_controller, echo_post);
+
+        std::this_thread::sleep_for(
+            std::chrono::milliseconds(kRouteRegistrationDelayMs));
+    }
+
     void SetUp() override {
         if (!IsHttpsServerReady()) {
             GTEST_SKIP() << "HTTPS server is not running on "
@@ -186,14 +200,6 @@ protected:
 };
 
 TEST_F(HttpsRoutingTest, AddRouteAndGet) {
-    auto test_controller = std::make_shared<TestController>();
-    R(GET, "/test", test_controller, show);
-    R(GET, "/test/json", test_controller, json_response);
-    R(POST, "/test/echo", test_controller, echo_post);
-
-    std::this_thread::sleep_for(
-        std::chrono::milliseconds(kRouteRegistrationDelayMs));
-
     auto client = MakeClient();
 
     try {
@@ -282,8 +288,7 @@ TEST_F(HttpsRoutingTest, ResponseTime) {
             });
 
         auto end = std::chrono::steady_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            end - start);
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         EXPECT_EQ(response.result_int(), 200);
         EXPECT_LT(duration.count(), kMaxResponseTimeMs);
@@ -294,10 +299,12 @@ TEST_F(HttpsRoutingTest, ResponseTime) {
 }
 
 TEST_F(HttpsRoutingTest, MultipleRequests) {
+    constexpr int kParallel = 10;
+
     net::io_context io;
     std::vector<std::future<brazier::Response>> futures;
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < kParallel; ++i) {
         auto future = net::co_spawn(
             io,
             [&]() -> net::awaitable<brazier::Response> {

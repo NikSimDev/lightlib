@@ -40,7 +40,6 @@ void brazier::HttpsServer::setTlsConfig(const TlsConfig& tls) {
     tls_config_from_user_ = true;
 }
 
-
 void brazier::HttpsServer::load_tls_config_from_global() {
     if (tls_config_from_user_) return;
 
@@ -119,6 +118,8 @@ void brazier::HttpsServer::configure_tls() {
         | ssl::context::no_sslv3
         | ssl::context::single_dh_use);
 
+    SSL_CTX_set_options(ssl_ctx_.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
+
     apply_ssl_conf();
 
     ssl_ctx_.use_certificate_chain_file(tls_.cert_file);
@@ -138,7 +139,6 @@ void brazier::HttpsServer::configure_tls() {
         ssl_ctx_.set_verify_mode(ssl::verify_none);
     }
 }
-
 
 bool brazier::HttpsServer::initialize() {
     try {
@@ -232,8 +232,7 @@ void brazier::HttpsServer::run() {
             while (!shutdown_flag_.load(std::memory_order_acquire)) {
                 std::this_thread::sleep_for(10s);
                 if (shutdown_flag_.load(std::memory_order_acquire)) break;
-                Logger::log(
-                    "HTTPS STATS - Active connections: " +
+                Logger::log("HTTPS STATS - Active connections: " +
                     std::to_string(connection_count_.load()) +
                     ", Total requests: " + std::to_string(total_requests_.load()),
                     "INFO");
@@ -278,17 +277,28 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
 
         ssl::stream<tcp::socket> stream(std::move(socket), ssl_ctx_);
 
-        beast::error_code ec;
-        co_await stream.async_handshake(
-            ssl::stream_base::server,
-            net::cancel_after(
-                tls_.handshake_timeout,
-                net::redirect_error(net::use_awaitable, ec)));
+        {
+            net::steady_timer hs_timer(co_await net::this_coro::executor);
+            hs_timer.expires_after(tls_.handshake_timeout);
+            hs_timer.async_wait([&](beast::error_code ec) {
+                if (!ec) {
+                    beast::error_code ignore;
+                    stream.next_layer().close(ignore);
+                }
+                });
 
-        if (ec) {
-            Logger::log("TLS handshake failed: " + ec.message(), "WARNING");
-            connection_count_.fetch_sub(1, std::memory_order_relaxed);
-            co_return;
+            beast::error_code hs_ec;
+            co_await stream.async_handshake(
+                ssl::stream_base::server,
+                net::redirect_error(net::use_awaitable, hs_ec));
+
+            hs_timer.cancel();
+
+            if (hs_ec) {
+                Logger::log("TLS handshake failed: " + hs_ec.message(), "WARNING");
+                connection_count_.fetch_sub(1, std::memory_order_relaxed);
+                co_return;
+            }
         }
 
         http::request<http::string_body>  req;
@@ -296,28 +306,39 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
         beast::flat_buffer buffer;
         bool keep_alive = true;
 
-        const auto idle_timeout = std::chrono::seconds(
+        net::steady_timer idle_timer(co_await net::this_coro::executor);
+        const auto IDLE_TIMEOUT = std::chrono::seconds(
             global_config->get("keep-alive-timeout", 60));
+        bool timed_out = false;
 
-        while (keep_alive) {
+        auto reset_timer = [&]() {
+            idle_timer.expires_after(IDLE_TIMEOUT);
+            idle_timer.async_wait([&](beast::error_code ec) {
+                if (!ec) {
+                    timed_out = true;
+                    beast::error_code ignore;
+                    stream.next_layer().close(ignore);
+                }
+                });
+            };
+
+        reset_timer();
+
+        while (keep_alive && !timed_out) {
+            beast::error_code ec;
             req = {};
-            ec.clear();
 
             co_await http::async_read(
                 stream, buffer, req,
-                net::cancel_after(
-                    idle_timeout,
-                    net::redirect_error(net::use_awaitable, ec)));
+                net::redirect_error(net::use_awaitable, ec));
 
             if (ec == http::error::end_of_stream) break;
-            if (ec == net::error::timed_out) {
-                Logger::log("HTTPS idle timeout, closing connection", "INFO");
-                break;
-            }
             if (ec) {
                 if (ec == net::error::operation_aborted) break;
-                throw boost::system::system_error(ec);
+                break;
             }
+
+            reset_timer();
 
             total_requests_.fetch_add(1, std::memory_order_relaxed);
             keep_alive = req.keep_alive();
@@ -329,14 +350,21 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             res.set(http::field::server, "brazier");
             res.set(http::field::strict_transport_security, "max-age=31536000");
 
-            co_await Router::handle_request(req, res);
+            try {
+                co_await Router::handle_request(req, res);
+            }
+            catch (const std::exception& e) {
+                Logger::log("Router error: " + std::string(e.what()), "ERROR");
+                res.result(http::status::internal_server_error);
+                res.set(http::field::content_type, "application/json");
+                res.body() = R"({"error":"internal server error"})";
+                keep_alive = false;
+            }
 
-            if (res.body().empty() &&
-                res.count(http::field::content_length) == 0) {
+            if (res.body().empty() && res.count(http::field::content_length) == 0) {
                 res.content_length(0);
             }
-            else if (!res.body().empty() &&
-                res.count(http::field::content_length) == 0) {
+            else if (!res.body().empty() && res.count(http::field::content_length) == 0) {
                 res.content_length(res.body().size());
             }
             res.prepare_payload();
@@ -344,32 +372,54 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             ec.clear();
             co_await http::async_write(
                 stream, res,
-                net::cancel_after(
-                    idle_timeout,
-                    net::redirect_error(net::use_awaitable, ec)));
+                net::redirect_error(net::use_awaitable, ec));
+
             if (ec) break;
 
             buffer.consume(buffer.size());
             if (!keep_alive) break;
         }
 
-        ec.clear();
-        co_await stream.async_shutdown(
-            net::cancel_after(
-                std::chrono::seconds(5),
-                net::redirect_error(net::use_awaitable, ec)));
+        idle_timer.cancel();
 
+        {
+            net::steady_timer sd_timer(co_await net::this_coro::executor);
+            sd_timer.expires_after(std::chrono::seconds(2));
+            sd_timer.async_wait([&](beast::error_code ec) {
+                if (!ec) {
+                    beast::error_code ignore;
+                    stream.next_layer().close(ignore);
+                }
+                });
+
+            beast::error_code sd_ec;
+            co_await stream.async_shutdown(
+                net::redirect_error(net::use_awaitable, sd_ec));
+
+            sd_timer.cancel();
+
+            if (sd_ec && sd_ec != net::error::eof
+                && sd_ec != net::error::operation_aborted
+                && sd_ec != ssl::error::stream_truncated
+                && sd_ec != net::error::connection_reset
+                && sd_ec != net::error::broken_pipe) {
+            }
+        }
+
+        {
+            beast::error_code ec;
+            stream.next_layer().shutdown(tcp::socket::shutdown_both, ec);
+            stream.next_layer().close(ec);
+        }
     }
     catch (const boost::system::system_error& e) {
         auto code = e.code();
-
         if (code == net::error::connection_reset ||
             code == net::error::connection_aborted ||
-            code == net::error::eof ||                     
-            code == net::error::operation_aborted ||      
-            code == net::error::broken_pipe ||             
-            code == ssl::error::stream_truncated) {        
-            Logger::log("HTTPS client disconnected", "DEBUG");
+            code == net::error::eof ||
+            code == net::error::operation_aborted ||
+            code == net::error::broken_pipe ||
+            code == ssl::error::stream_truncated) {
         }
         else {
             Logger::log("HTTPS connection error: " + std::string(e.what()), "ERROR");
