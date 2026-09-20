@@ -26,6 +26,7 @@
 #  include <windows.h>
 #else
 #  include <sys/resource.h>
+#  include <sys/socket.h>
 #  ifdef __APPLE__
 #    include <sys/sysctl.h>
 #    include <sys/types.h>
@@ -35,19 +36,11 @@
 #endif
 
 brazier::HttpsServer::HttpsServer(const std::string& host, unsigned short port)
-    : acceptor_(io_)
-    , port_(port), host_(host) {
-    work_guard_ = std::make_unique<
-        net::executor_work_guard<net::io_context::executor_type>>(io_.get_executor());
-}
+    : port_(port), host_(host) {}
 
 brazier::HttpsServer::HttpsServer(const std::string& host, unsigned short port,
     const TlsConfig& tls)
-    : acceptor_(io_)
-    , port_(port), host_(host), tls_(tls), tls_config_from_user_(true) {
-    work_guard_ = std::make_unique<
-        net::executor_work_guard<net::io_context::executor_type>>(io_.get_executor());
-}
+    : port_(port), host_(host), tls_(tls), tls_config_from_user_(true) {}
 
 void brazier::HttpsServer::setTlsConfig(const TlsConfig& tls) {
     tls_ = tls;
@@ -99,11 +92,20 @@ std::size_t brazier::HttpsServer::get_system_memory_mb() {
 #endif
 }
 
+int brazier::HttpsServer::get_worker_count() {
+#if defined(SO_REUSEPORT)
+    int n = static_cast<int>(std::thread::hardware_concurrency());
+    return (n > 0) ? n : 1;
+#else
+    return 1;
+#endif
+}
+
 std::size_t brazier::HttpsServer::compute_max_body_size(
     std::size_t ram_mb, int max_conn) {
     constexpr double      kBodyRamBudget = 0.25;
-    constexpr std::size_t kMinBody = 64 * 1024;          
-    constexpr std::size_t kMaxBodyCap = 16 * 1024 * 1024;   
+    constexpr std::size_t kMinBody = 64 * 1024;
+    constexpr std::size_t kMaxBodyCap = 16 * 1024 * 1024;
 
     if (max_conn <= 0) max_conn = 1;
 
@@ -117,11 +119,11 @@ std::size_t brazier::HttpsServer::compute_max_body_size(
     return result;
 }
 
-std::size_t brazier::HttpsServer::compute_max_header_size(
+std::uint32_t brazier::HttpsServer::compute_max_header_size(
     std::size_t ram_mb, int max_conn) {
-    constexpr double      kHeaderRamBudget = 0.01;
-    constexpr std::size_t kMinHeader = 4 * 1024;        
-    constexpr std::size_t kMaxHeaderCap = 32 * 1024;       
+    constexpr double        kHeaderRamBudget = 0.01;
+    constexpr std::uint32_t kMinHeader = 4 * 1024;
+    constexpr std::uint32_t kMaxHeaderCap = 32 * 1024;
 
     if (max_conn <= 0) max_conn = 1;
 
@@ -132,7 +134,7 @@ std::size_t brazier::HttpsServer::compute_max_header_size(
     std::size_t result = per_conn;
     if (result < kMinHeader)    result = kMinHeader;
     if (result > kMaxHeaderCap) result = kMaxHeaderCap;
-    return result;
+    return static_cast<std::uint32_t>(result);
 }
 
 void brazier::HttpsServer::load_tls_config_from_global() {
@@ -212,10 +214,10 @@ void brazier::HttpsServer::load_limits_from_config() {
     }
 
     if (testing_hdr > 0) {
-        max_header_size_ = static_cast<std::size_t>(testing_hdr);
+        max_header_size_ = static_cast<std::uint32_t>(testing_hdr);
     }
     else if (int v = global_config->get("http.max_header_size", 0); v > 0) {
-        max_header_size_ = static_cast<std::size_t>(v);
+        max_header_size_ = static_cast<std::uint32_t>(v);
     }
     else {
         max_header_size_ = compute_max_header_size(ram_mb, max_connections_);
@@ -319,18 +321,52 @@ bool brazier::HttpsServer::initialize() {
         load_limits_from_config();
         configure_tls();
 
-        tcp::endpoint endpoint(net::ip::make_address(host_), port_);
-        acceptor_.open(endpoint.protocol());
-        acceptor_.set_option(tcp::acceptor::reuse_address(true));
-        acceptor_.bind(endpoint);
-        acceptor_.listen();
+        const tcp::endpoint endpoint(net::ip::make_address(host_), port_);
+        const int worker_count = get_worker_count();
+
+        io_contexts_.reserve(worker_count);
+        acceptors_.reserve(worker_count);
+        work_guards_.reserve(worker_count);
+
+        for (int i = 0; i < worker_count; ++i) {
+            auto io = std::make_unique<net::io_context>();
+            auto acc = std::make_unique<tcp::acceptor>(*io);
+
+            acc->open(endpoint.protocol());
+            acc->set_option(tcp::acceptor::reuse_address(true));
+
+#if defined(SO_REUSEPORT)
+            int one = 1;
+            if (::setsockopt(acc->native_handle(), SOL_SOCKET, SO_REUSEPORT,
+                reinterpret_cast<const char*>(&one),
+                sizeof(one)) != 0) {
+                Logger::log("SO_REUSEPORT setsockopt failed on worker " +
+                    std::to_string(i), "WARNING");
+            }
+#endif
+
+            acc->bind(endpoint);
+            acc->listen(boost::asio::socket_base::max_listen_connections);
+
+            work_guards_.push_back(std::make_unique<
+                net::executor_work_guard<net::io_context::executor_type>>(
+                    io->get_executor()));
+
+            io_contexts_.push_back(std::move(io));
+            acceptors_.push_back(std::move(acc));
+        }
 
         initializeConnections();
-        RouterRegisterer::init(io_);
-        Engine::init(io_);
-
+        RouterRegisterer::init(*io_contexts_[0]);
         Logger::log("HTTPS server initialized on " + host_ + ":" +
-            std::to_string(port_) + " [TLS]", "SUCCESS");
+            std::to_string(port_) + " [TLS, workers=" +
+            std::to_string(worker_count) + ", SO_REUSEPORT=" +
+#if defined(SO_REUSEPORT)
+            "yes"
+#else
+            "no"
+#endif
+            + "]", "SUCCESS");
         return true;
     }
     catch (const std::exception& e) {
@@ -368,16 +404,21 @@ void brazier::HttpsServer::initializeConnections() {
 
 void brazier::HttpsServer::run() {
     try {
-        net::co_spawn(io_, accept_loop(), net::detached);
+        for (size_t i = 0; i < io_contexts_.size(); ++i) {
+            net::co_spawn(*io_contexts_[i],
+                accept_loop(*acceptors_[i]),
+                net::detached);
+        }
 
-        int threads_count = std::thread::hardware_concurrency();
-        if (threads_count == 0) threads_count = 1;
+        Logger::log("Starting " + std::to_string(io_contexts_.size()) +
+            " HTTPS worker thread(s)", "INFO");
 
-        Logger::log("Starting " + std::to_string(threads_count) +
-            " HTTPS worker threads", "INFO");
-
-        for (int i = 0; i < threads_count; ++i) {
-            threads_.emplace_back([this] { io_.run(); });
+        for (auto& io : io_contexts_) {
+            auto* io_ptr = io.get();
+            threads_.emplace_back([io_ptr] {
+                brazier::Engine::init(*io_ptr);
+                io_ptr->run();
+                });
         }
 
         shutdown_flag_.store(false, std::memory_order_release);
@@ -392,7 +433,7 @@ void brazier::HttpsServer::run() {
                         return shutdown_flag_.load(std::memory_order_acquire);
                     });
 
-                if (woke) break; 
+                if (woke) break;
 
                 lock.unlock();
                 Logger::log("HTTPS STATS - Active connections: " +
@@ -428,12 +469,12 @@ void brazier::HttpsServer::stop() {
         stats_cv_.notify_all();
     }
 
-    {
+    for (auto& acc : acceptors_) {
         boost::system::error_code ignore;
-        acceptor_.close(ignore);
+        acc->close(ignore);
     }
 
-    work_guard_.reset();
+    for (auto& wg : work_guards_) wg->reset();
 
     {
         std::unique_lock<std::mutex> lock(shutdown_mutex_);
@@ -451,7 +492,7 @@ void brazier::HttpsServer::stop() {
         }
     }
 
-    io_.stop();
+    for (auto& io : io_contexts_) io->stop();
 
     Logger::log("HTTPS server stop() signaled", "INFO");
 }
@@ -466,14 +507,14 @@ void brazier::HttpsServer::release_connection() {
     }
 }
 
-net::awaitable<void> brazier::HttpsServer::accept_loop() {
+net::awaitable<void> brazier::HttpsServer::accept_loop(tcp::acceptor& acceptor) {
     for (;;) {
         if (shutting_down_.load(std::memory_order_acquire)) {
             co_return;
         }
 
         beast::error_code ec;
-        tcp::socket socket = co_await acceptor_.async_accept(
+        tcp::socket socket = co_await acceptor.async_accept(
             net::redirect_error(net::use_awaitable, ec));
 
         if (ec) {
@@ -496,7 +537,9 @@ net::awaitable<void> brazier::HttpsServer::accept_loop() {
             continue;
         }
 
-        net::co_spawn(io_, handle_connection(std::move(socket)), net::detached);
+        net::co_spawn(acceptor.get_executor(),
+            handle_connection(std::move(socket)),
+            net::detached);
     }
 }
 
@@ -558,7 +601,7 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
         while (keep_alive && !timed_out) {
             parser.emplace();
             parser->body_limit(max_body_size_);
-            parser->header_limit(static_cast<std::uint32_t>(max_header_size_));
+            parser->header_limit(max_header_size_);
 
             beast::error_code ec;
 

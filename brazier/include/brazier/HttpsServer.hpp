@@ -39,10 +39,10 @@
 #include <openssl/err.h>
 
 #include <atomic>
-#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -89,12 +89,15 @@ namespace brazier {
         std::chrono::milliseconds handshake_timeout_ms_{ 15000 };
 
         std::size_t max_body_size_ = 1024 * 1024;
-        std::size_t max_header_size_ = 8 * 1024;
+        std::uint32_t max_header_size_ = 8 * 1024;
         int         max_connections_ = 10000;
 
-        net::io_context io_;
-        ssl::context    ssl_ctx_{ ssl::context::tls_server };
-        tcp::acceptor   acceptor_;
+        std::vector<std::unique_ptr<net::io_context>> io_contexts_;
+        std::vector<std::unique_ptr<tcp::acceptor>>   acceptors_;
+        std::vector<std::unique_ptr<
+            net::executor_work_guard<net::io_context::executor_type>>> work_guards_;
+
+        ssl::context ssl_ctx_{ ssl::context::tls_server };
 
         std::thread       stats_thread_;
         std::atomic<bool> shutdown_flag_{ false };
@@ -110,8 +113,6 @@ namespace brazier {
         std::string    host_;
 
         std::vector<std::thread> threads_;
-        std::unique_ptr<
-            net::executor_work_guard<net::io_context::executor_type>> work_guard_;
 
         std::atomic<int> connection_count_{ 0 };
         std::atomic<int> total_requests_{ 0 };
@@ -143,9 +144,10 @@ namespace brazier {
         unsigned short     getPort() const;
         const std::string& getHost() const;
 
-        int         getMaxConnections() const { return max_connections_; }
-        std::size_t getMaxBodySize()    const { return max_body_size_; }
-        std::size_t getMaxHeaderSize()  const { return max_header_size_; }
+        int           getMaxConnections() const { return max_connections_; }
+        std::size_t   getMaxBodySize()    const { return max_body_size_; }
+        std::uint32_t getMaxHeaderSize()  const { return max_header_size_; }
+        std::size_t   getIoContextCount() const { return io_contexts_.size(); }
 
     private:
         void initializeConnections();
@@ -160,12 +162,13 @@ namespace brazier {
 
         static std::size_t get_fd_limit();
         static std::size_t get_system_memory_mb();
+        static int         get_worker_count();
 
-        static std::size_t compute_max_body_size(std::size_t ram_mb, int max_conn);
-        static std::size_t compute_max_header_size(std::size_t ram_mb, int max_conn);
+        static std::size_t   compute_max_body_size(std::size_t ram_mb, int max_conn);
+        static std::uint32_t compute_max_header_size(std::size_t ram_mb, int max_conn);
 
         net::awaitable<void> handle_connection(tcp::socket socket);
-        net::awaitable<void> accept_loop();
+        net::awaitable<void> accept_loop(tcp::acceptor& acceptor);
     };
 
 }
