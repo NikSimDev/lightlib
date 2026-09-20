@@ -103,8 +103,8 @@ jobs:
       run: |
         mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout build/brazier/brazier/app/certs/server.key \
-          -out build/brazier/brazier/app/certs/server.crt \
+          -keyout build/brazier/app/certs/server.key \
+          -out build/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
       shell: bash
@@ -200,8 +200,8 @@ jobs:
       run: |
         New-Item -ItemType Directory -Force -Path "build/brazier/app/certs" | Out-Null
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes `
-          -keyout "build/brazier/brazier/app/certs/server.key" `
-          -out "build/brazier/brazier/app/certs/server.crt" `
+          -keyout "build/brazier/app/certs/server.key" `
+          -out "build/brazier/app/certs/server.crt" `
           -subj "/CN=localhost" `
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
 
@@ -287,8 +287,8 @@ jobs:
       run: |
         mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout build/brazier/brazier/app/certs/server.key \
-          -out build/brazier/brazier/app/certs/server.crt \
+          -keyout build/brazier/app/certs/server.key \
+          -out build/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
       shell: bash
