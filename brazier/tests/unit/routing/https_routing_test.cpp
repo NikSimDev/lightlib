@@ -43,6 +43,7 @@
 #include "../../../include/brazier/Core"
 #include "../../../include/brazier/Http"
 #include "main.h"
+#include "tls_test_client.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -395,4 +396,144 @@ TEST_F(HttpsRoutingTest, ServesExpectedCertificate) {
         << "Certificate CN mismatch. Got: " << cn;
 
     X509_free(cert);
+}
+
+TEST_F(HttpsRoutingTest, PayloadTooLarge) {
+    ASSERT_NE(g_test_https_server, nullptr);
+    const std::size_t limit = g_test_https_server->getMaxBodySize();
+    const std::size_t body_size = limit * 4;
+
+    tls_test::TlsClient c(https_host_global, https_port_global);
+    ASSERT_TRUE(c.connect());
+
+    std::string headers =
+        "POST /test/echo HTTP/1.1\r\n"
+        "Host: " + https_host_global + "\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: " + std::to_string(body_size) + "\r\n"
+        "Connection: close\r\n"
+        "\r\n";
+
+    ASSERT_TRUE(c.send_raw(headers));
+    auto res = c.read_response(5);
+
+    if (res.has_value()) {
+        EXPECT_EQ(res->result_int(), 413);
+    }
+    else {
+        EXPECT_TRUE(c.is_connection_closed(2))
+            << "No response and connection not closed";
+    }
+}
+
+TEST_F(HttpsRoutingTest, HeaderTooLarge) {
+    ASSERT_NE(g_test_https_server, nullptr);
+    const std::size_t limit = g_test_https_server->getMaxHeaderSize();
+    const std::size_t header_size = limit * 4;
+
+    tls_test::TlsClient c(https_host_global, https_port_global);
+    ASSERT_TRUE(c.connect());
+
+    std::string huge(header_size, 'x');
+    std::string req =
+        "GET /test HTTP/1.1\r\n"
+        "Host: " + https_host_global + "\r\n"
+        "X-Huge: " + huge + "\r\n"
+        "Connection: close\r\n"
+        "\r\n";
+
+    ASSERT_TRUE(c.send_raw(req));
+
+    auto res = c.read_response(5);
+    bool closed = c.is_connection_closed(3);
+
+    bool acceptable = (res.has_value() &&
+        res->result_int() >= 400 &&
+        res->result_int() < 500)
+        || (!res.has_value() && closed);
+
+    EXPECT_TRUE(acceptable)
+        << "Expected 4xx or close, got has_value=" << res.has_value()
+        << ", status=" << (res.has_value() ? res->result_int() : 0);
+}
+
+TEST_F(HttpsRoutingTest, ConnectionLimit) {
+    ASSERT_NE(g_test_https_server, nullptr);
+    const int limit = g_test_https_server->getMaxConnections();
+
+    if (limit <= 0 || limit > 100) {
+        GTEST_SKIP() << "max_connections=" << limit
+            << " is not suitable. Set http.max_connections_testing to 10..100.";
+    }
+
+    std::vector<std::unique_ptr<tls_test::TlsClient>> held;
+    held.reserve(limit);
+
+    for (int i = 0; i < limit; ++i) {
+        auto c = std::make_unique<tls_test::TlsClient>(
+            https_host_global, https_port_global);
+        ASSERT_TRUE(c->connect())
+            << "Handshake #" << i << " failed within limit " << limit;
+        held.push_back(std::move(c));
+    }
+
+    tls_test::TlsClient extra(https_host_global, https_port_global);
+    const bool connected = extra.connect();
+
+    if (connected) {
+        EXPECT_TRUE(extra.is_connection_closed(3))
+            << "Server accepted connection beyond limit " << limit
+            << " and did not close it";
+    }
+}
+
+TEST_F(HttpsRoutingTest, ConnectionsReleasedAfterClose) {
+    ASSERT_NE(g_test_https_server, nullptr);
+    const int limit = g_test_https_server->getMaxConnections();
+
+    if (limit <= 0 || limit > 100) {
+        GTEST_SKIP() << "max_connections=" << limit
+            << " is not suitable. Set http.max_connections_testing to 10..100.";
+    }
+
+    const int iterations = limit + 5;
+
+    for (int i = 0; i < iterations; ++i) {
+        tls_test::TlsClient c(https_host_global, https_port_global);
+        ASSERT_TRUE(c.connect())
+            << "Connection #" << i << " rejected — "
+            "ConnectionGuard likely not releasing the counter";
+
+        ASSERT_TRUE(c.send_raw(
+            "GET /test HTTP/1.1\r\n"
+            "Host: " + https_host_global + "\r\n"
+            "Connection: close\r\n"
+            "\r\n"));
+
+        auto res = c.read_response();
+        ASSERT_TRUE(res.has_value()) << "No response at iteration " << i;
+        EXPECT_EQ(res->result_int(), 200);
+    }
+}
+
+TEST_F(HttpsRoutingTest, ConnectionsReleasedAfterProtocolError) {
+    ASSERT_NE(g_test_https_server, nullptr);
+    const int limit = g_test_https_server->getMaxConnections();
+
+    if (limit <= 0 || limit > 100) {
+        GTEST_SKIP() << "max_connections=" << limit
+            << " is not suitable. Set http.max_connections_testing to 10..100.";
+    }
+
+    const int iterations = limit + 5;
+
+    for (int i = 0; i < iterations; ++i) {
+        tls_test::TlsClient c(https_host_global, https_port_global);
+        ASSERT_TRUE(c.connect())
+            << "Connection #" << i << " rejected after protocol errors — "
+            "ConnectionGuard likely not releasing on exceptions";
+
+        c.send_raw("this is not an HTTP request\r\n\r\n");
+        c.is_connection_closed(2);
+    }
 }

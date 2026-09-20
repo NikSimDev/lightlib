@@ -1,8 +1,5 @@
 {
-  "server": {
-    "host": "0.0.0.0",
-    "port": 3502
-  },
+  "app_name": "brazierApp",
   "https_server": {
     "host": "0.0.0.0",
     "port": 8443,
@@ -13,16 +10,12 @@
       "require_client_cert": false,
       "verify_client_cert": false,
       "handshake_timeout": 3,
-      "conf": [
-      ]
+      "conf": []
     }
   },
-  "app_name": "brazierApp",
-  "filesystem": {
-    "drivers": {
-      "local": { "root": "./storage" },
-      "root": { "root": "./" },
-      "default": "local"
-    }
+  "http": {
+    "max_connections_testing": 20,
+    "max_body_size_testing": 1048576,
+    "max_header_size_testing": 8192
   }
 }

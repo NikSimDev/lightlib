@@ -34,6 +34,8 @@ extern std::shared_ptr<brazier::Server> g_test_server;
 extern std::atomic<bool> g_server_ready;
 extern std::thread g_server_thread;
 
+extern std::shared_ptr<brazier::HttpsServer> g_test_https_server;
+
 extern int port_global;
 extern std::string host_global;
 

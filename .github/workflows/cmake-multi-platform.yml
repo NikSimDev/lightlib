@@ -75,22 +75,23 @@ jobs:
         cat > config_test.json <<'EOF'
         {
           "app_name": "brazierApp",
-          "server": {
-            "host": "127.0.0.1",
-            "port": 3502
-          },
           "https_server": {
-            "host": "127.0.0.1",
+            "host": "0.0.0.0",
             "port": 8443,
             "tls": {
-              "cert_file": "brazier/app/certs/server.crt",
-              "key_file": "brazier/app/certs/server.key",
+              "cert_file": "app/certs/server.crt",
+              "key_file": "app/certs/server.key",
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
-              "handshake_timeout": 15,
+              "handshake_timeout": 3,
               "conf": []
             }
+          },
+          "http": {
+            "max_connections_testing": 20,
+            "max_body_size_testing": 1048576,
+            "max_header_size_testing": 8192
           }
         }
         EOF
@@ -170,22 +171,23 @@ jobs:
         cat > config_test.json <<'EOF'
         {
           "app_name": "brazierApp",
-          "server": {
-            "host": "127.0.0.1",
-            "port": 3502
-          },
           "https_server": {
-            "host": "127.0.0.1",
+            "host": "0.0.0.0",
             "port": 8443,
             "tls": {
-              "cert_file": "brazier/app/certs/server.crt",
-              "key_file": "brazier/app/certs/server.key",
+              "cert_file": "app/certs/server.crt",
+              "key_file": "app/certs/server.key",
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
-              "handshake_timeout": 15,
+              "handshake_timeout": 3,
               "conf": []
             }
+          },
+          "http": {
+            "max_connections_testing": 20,
+            "max_body_size_testing": 1048576,
+            "max_header_size_testing": 8192
           }
         }
         EOF
@@ -257,22 +259,23 @@ jobs:
         cat > config_test.json <<'EOF'
         {
           "app_name": "brazierApp",
-          "server": {
-            "host": "127.0.0.1",
-            "port": 3502
-          },
           "https_server": {
-            "host": "127.0.0.1",
+            "host": "0.0.0.0",
             "port": 8443,
             "tls": {
-              "cert_file": "brazier/app/certs/server.crt",
-              "key_file": "brazier/app/certs/server.key",
+              "cert_file": "app/certs/server.crt",
+              "key_file": "app/certs/server.key",
               "ca_file": "",
               "require_client_cert": false,
               "verify_client_cert": false,
-              "handshake_timeout": 15,
+              "handshake_timeout": 3,
               "conf": []
             }
+          },
+          "http": {
+            "max_connections_testing": 20,
+            "max_body_size_testing": 1048576,
+            "max_header_size_testing": 8192
           }
         }
         EOF

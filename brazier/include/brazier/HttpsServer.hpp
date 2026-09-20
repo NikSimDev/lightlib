@@ -32,7 +32,7 @@
 #include <boost/asio/detached.hpp>
 #include <boost/asio/use_awaitable.hpp>
 #include <boost/asio/steady_timer.hpp>
-#include <boost/asio/cancel_after.hpp>        
+#include <boost/asio/cancel_after.hpp>
 #include <boost/config.hpp>
 
 #include <openssl/ssl.h>
@@ -41,13 +41,14 @@
 #include <atomic>
 #include <array>
 #include <chrono>
+#include <condition_variable>
+#include <cstddef>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <thread>
-#include <utility>                            
+#include <utility>
 #include <vector>
-#include <condition_variable>
-#include <mutex>
 
 #include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
@@ -71,9 +72,9 @@ namespace brazier {
     class HttpsServer {
     public:
         struct TlsConfig {
-            std::string cert_file;    
-            std::string key_file;     
-            std::string ca_file;      
+            std::string cert_file;
+            std::string key_file;
+            std::string ca_file;
 
             std::vector<std::pair<std::string, std::string>> conf;
 
@@ -84,32 +85,53 @@ namespace brazier {
         };
 
     private:
+        std::chrono::seconds      keep_alive_timeout_{ 60 };
+        std::chrono::milliseconds handshake_timeout_ms_{ 15000 };
+
+        std::size_t max_body_size_ = 1024 * 1024;
+        std::size_t max_header_size_ = 8 * 1024;
+        int         max_connections_ = 10000;
+
         net::io_context io_;
         ssl::context    ssl_ctx_{ ssl::context::tls_server };
         tcp::acceptor   acceptor_;
 
-        std::thread        stats_thread_;
-        std::atomic<bool>  shutdown_flag_{ false };
+        std::thread       stats_thread_;
+        std::atomic<bool> shutdown_flag_{ false };
 
         std::mutex              stats_mutex_;
         std::condition_variable stats_cv_;
+
+        std::atomic<bool>       shutting_down_{ false };
+        std::mutex              shutdown_mutex_;
+        std::condition_variable shutdown_cv_;
 
         unsigned short port_;
         std::string    host_;
 
         std::vector<std::thread> threads_;
-        std::unique_ptr<net::executor_work_guard<net::io_context::executor_type>> work_guard_;
+        std::unique_ptr<
+            net::executor_work_guard<net::io_context::executor_type>> work_guard_;
 
         std::atomic<int> connection_count_{ 0 };
         std::atomic<int> total_requests_{ 0 };
 
-
         TlsConfig tls_;
         bool      tls_config_from_user_ = false;
 
+        struct ConnectionGuard {
+            HttpsServer& srv;
+            explicit ConnectionGuard(HttpsServer& s) noexcept : srv(s) {}
+            ~ConnectionGuard() { srv.release_connection(); }
+
+            ConnectionGuard(const ConnectionGuard&) = delete;
+            ConnectionGuard& operator=(const ConnectionGuard&) = delete;
+        };
+
     public:
         HttpsServer(const std::string& host, unsigned short port);
-        HttpsServer(const std::string& host, unsigned short port, const TlsConfig& tls);
+        HttpsServer(const std::string& host, unsigned short port,
+            const TlsConfig& tls);
 
         void setTlsConfig(const TlsConfig& tls);
 
@@ -121,12 +143,26 @@ namespace brazier {
         unsigned short     getPort() const;
         const std::string& getHost() const;
 
+        int         getMaxConnections() const { return max_connections_; }
+        std::size_t getMaxBodySize()    const { return max_body_size_; }
+        std::size_t getMaxHeaderSize()  const { return max_header_size_; }
+
     private:
         void initializeConnections();
 
         void load_tls_config_from_global();
+        void load_limits_from_config();
+
         void configure_tls();
         void apply_ssl_conf();
+
+        void release_connection();
+
+        static std::size_t get_fd_limit();
+        static std::size_t get_system_memory_mb();
+
+        static std::size_t compute_max_body_size(std::size_t ram_mb, int max_conn);
+        static std::size_t compute_max_header_size(std::size_t ram_mb, int max_conn);
 
         net::awaitable<void> handle_connection(tcp::socket socket);
         net::awaitable<void> accept_loop();
