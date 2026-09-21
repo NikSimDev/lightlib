@@ -32,6 +32,7 @@
 #    include <sys/types.h>
 #  else
 #    include <sys/sysinfo.h>
+#    include <netinet / tcp.h>
 #  endif
 #endif
 
@@ -358,6 +359,16 @@ bool brazier::HttpsServer::initialize() {
             }
 #endif
 
+#if defined(TCP_DEFER_ACCEPT)
+            int defer_secs = 1;
+            if (::setsockopt(acc->native_handle(), IPPROTO_TCP, TCP_DEFER_ACCEPT,
+                reinterpret_cast<const char*>(&defer_secs),
+                sizeof(defer_secs)) != 0) {
+                Logger::log("TCP_DEFER_ACCEPT setsockopt failed on worker " +
+                    std::to_string(i), "WARNING");
+            }
+#endif
+
             acc->bind(endpoint);
             acc->listen(boost::asio::socket_base::max_listen_connections);
 
@@ -371,10 +382,17 @@ bool brazier::HttpsServer::initialize() {
 
         initializeConnections();
         RouterRegisterer::init(*io_contexts_[0]);
+
         Logger::log("HTTPS server initialized on " + host_ + ":" +
             std::to_string(port_) + " [TLS, workers=" +
             std::to_string(worker_count) + ", SO_REUSEPORT=" +
 #if defined(SO_REUSEPORT)
+            "yes"
+#else
+            "no"
+#endif
+            + ", TCP_DEFER_ACCEPT=" +
+#if defined(TCP_DEFER_ACCEPT)
             "yes"
 #else
             "no"
