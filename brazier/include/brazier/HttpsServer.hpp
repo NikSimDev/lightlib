@@ -49,6 +49,9 @@
 #include <thread>
 #include <utility>
 #include <vector>
+#include <cstring>
+#include <ctime>
+#include <deque>
 
 #include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
@@ -59,6 +62,8 @@
 #include "Engine.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "vendor/ConfigManager.hpp"
+
+#include "../include/brazier/TLS/TicketKeyStore.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -128,6 +133,8 @@ namespace brazier {
             ConnectionGuard(const ConnectionGuard&) = delete;
             ConnectionGuard& operator=(const ConnectionGuard&) = delete;
         };
+
+        brazier::TicketKeyStore ticket_store_;
 
     public:
         HttpsServer(const std::string& host, unsigned short port);

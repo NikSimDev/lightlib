@@ -428,3 +428,143 @@ TEST_F(HttpsSecurityTest, AbruptClientDisconnect) {
     TlsClient c2;
     EXPECT_TRUE(c2.connect()) << "Server not accepting after abrupt disconnect";
 }
+
+TEST_F(HttpsSecurityTest, SessionResumptionTls12) {
+    net::io_context io;
+    ssl::context ctx(ssl::context::tls_client);
+    ctx.set_verify_mode(ssl::verify_none);
+    ctx.set_options(ssl::context::no_tlsv1
+        | ssl::context::no_tlsv1_1
+        | ssl::context::no_tlsv1_3);
+
+    std::unique_ptr<SSL_SESSION, decltype(&SSL_SESSION_free)>
+        session(nullptr, &SSL_SESSION_free);
+
+    {
+        ssl::stream<beast::tcp_stream> stream(io, ctx);
+        tcp::resolver resolver(io);
+        auto results = resolver.resolve(https_host_global,
+            std::to_string(https_port_global));
+
+        beast::get_lowest_layer(stream).expires_after(
+            std::chrono::seconds(kSocketTimeoutSec));
+        beast::get_lowest_layer(stream).connect(results);
+        beast::get_lowest_layer(stream).expires_never();
+        stream.handshake(ssl::stream_base::client);
+
+        EXPECT_FALSE(SSL_session_reused(stream.native_handle()))
+            << "First handshake must be full";
+
+        std::string req = "GET /test HTTP/1.1\r\n"
+            "Host: " + https_host_global + "\r\n"
+            "Connection: close\r\n\r\n";
+        net::write(stream, net::buffer(req));
+
+        beast::flat_buffer buf;
+        http::response<http::string_body> res;
+        beast::get_lowest_layer(stream).expires_after(
+            std::chrono::seconds(kSocketTimeoutSec));
+        http::read(stream, buf, res);
+        EXPECT_EQ(res.result_int(), 200);
+
+        session.reset(SSL_get1_session(stream.native_handle()));
+        ASSERT_NE(session.get(), nullptr)
+            << "Server did not issue a session";
+
+        beast::error_code ec;
+        stream.shutdown(ec);
+    }
+
+    {
+        ssl::stream<beast::tcp_stream> stream(io, ctx);
+        tcp::resolver resolver(io);
+        auto results = resolver.resolve(https_host_global,
+            std::to_string(https_port_global));
+
+        beast::get_lowest_layer(stream).expires_after(
+            std::chrono::seconds(kSocketTimeoutSec));
+        beast::get_lowest_layer(stream).connect(results);
+        beast::get_lowest_layer(stream).expires_never();
+
+        ASSERT_EQ(SSL_set_session(stream.native_handle(), session.get()), 1)
+            << "SSL_set_session failed";
+
+        stream.handshake(ssl::stream_base::client);
+
+        EXPECT_TRUE(SSL_session_reused(stream.native_handle()))
+            << "Second handshake should be abbreviated (TLS 1.2)";
+
+        beast::error_code ec;
+        stream.shutdown(ec);
+    }
+}
+
+TEST_F(HttpsSecurityTest, SessionResumptionTls13) {
+    net::io_context io;
+    ssl::context ctx(ssl::context::tls_client);
+    ctx.set_verify_mode(ssl::verify_none);
+    ctx.set_options(ssl::context::no_tlsv1
+        | ssl::context::no_tlsv1_1
+        | ssl::context::no_tlsv1_2);
+
+    std::unique_ptr<SSL_SESSION, decltype(&SSL_SESSION_free)>
+        session(nullptr, &SSL_SESSION_free);
+
+    {
+        ssl::stream<beast::tcp_stream> stream(io, ctx);
+        tcp::resolver resolver(io);
+        auto results = resolver.resolve(https_host_global,
+            std::to_string(https_port_global));
+
+        beast::get_lowest_layer(stream).expires_after(
+            std::chrono::seconds(kSocketTimeoutSec));
+        beast::get_lowest_layer(stream).connect(results);
+        beast::get_lowest_layer(stream).expires_never();
+        stream.handshake(ssl::stream_base::client);
+
+        EXPECT_FALSE(SSL_session_reused(stream.native_handle()))
+            << "First handshake must be full";
+
+        std::string req = "GET /test HTTP/1.1\r\n"
+            "Host: " + https_host_global + "\r\n"
+            "Connection: close\r\n\r\n";
+        net::write(stream, net::buffer(req));
+
+        beast::flat_buffer buf;
+        http::response<http::string_body> res;
+        beast::get_lowest_layer(stream).expires_after(
+            std::chrono::seconds(kSocketTimeoutSec));
+        http::read(stream, buf, res);
+        EXPECT_EQ(res.result_int(), 200);
+
+        session.reset(SSL_get1_session(stream.native_handle()));
+        ASSERT_NE(session.get(), nullptr)
+            << "Server did not issue a session (ticket)";
+
+        beast::error_code ec;
+        stream.shutdown(ec);
+    }
+
+    {
+        ssl::stream<beast::tcp_stream> stream(io, ctx);
+        tcp::resolver resolver(io);
+        auto results = resolver.resolve(https_host_global,
+            std::to_string(https_port_global));
+
+        beast::get_lowest_layer(stream).expires_after(
+            std::chrono::seconds(kSocketTimeoutSec));
+        beast::get_lowest_layer(stream).connect(results);
+        beast::get_lowest_layer(stream).expires_never();
+
+        ASSERT_EQ(SSL_set_session(stream.native_handle(), session.get()), 1)
+            << "SSL_set_session failed";
+
+        stream.handshake(ssl::stream_base::client);
+
+        EXPECT_TRUE(SSL_session_reused(stream.native_handle()))
+            << "Second handshake should be abbreviated (TLS 1.3)";
+
+        beast::error_code ec;
+        stream.shutdown(ec);
+    }
+}

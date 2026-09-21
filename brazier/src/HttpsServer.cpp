@@ -274,6 +274,19 @@ void brazier::HttpsServer::configure_tls() {
 
     SSL_CTX_set_options(ssl_ctx_.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
 
+    SSL_CTX_set_session_cache_mode(
+        ssl_ctx_.native_handle(),
+        SSL_SESS_CACHE_SERVER);
+
+    static const unsigned char sid_ctx[] = "brazier-https";
+    SSL_CTX_set_session_id_context(
+        ssl_ctx_.native_handle(),
+        sid_ctx,
+        sizeof(sid_ctx) - 1);
+
+    ticket_store_.ensure_initialized();
+    ticket_store_.attach_to(ssl_ctx_.native_handle());
+
     apply_ssl_conf();
 
     ssl_ctx_.use_certificate_chain_file(tls_.cert_file);
