@@ -32,7 +32,7 @@
 #    include <sys/types.h>
 #  else
 #    include <sys/sysinfo.h>
-#    include <netinet / tcp.h>
+#    include <netinet/tcp.h>
 #  endif
 #endif
 
