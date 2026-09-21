@@ -41,18 +41,14 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
-#include <cstddef>
-#include <cstdint>
 #include <memory>
 #include <mutex>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
-#include <cstring>
-#include <ctime>
-#include <deque>
 
+#include "TLS/TicketKeyStore.hpp"
 #include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
 #include "Database/Cache.hpp"
@@ -62,8 +58,6 @@
 #include "Engine.hpp"
 #include "Filesystem/Filesystem.hpp"
 #include "vendor/ConfigManager.hpp"
-
-#include "../include/brazier/TLS/TicketKeyStore.hpp"
 
 namespace beast = boost::beast;
 namespace http = beast::http;
@@ -90,11 +84,11 @@ namespace brazier {
         };
 
     private:
-        std::chrono::seconds      keep_alive_timeout_{ 60 };
+        std::chrono::seconds keep_alive_timeout_{ 60 };
 
-        std::size_t max_body_size_ = 1024 * 1024;
-        std::uint32_t max_header_size_ = 8 * 1024;
-        int         max_connections_ = 10000;
+        int max_body_size_ = 1024 * 1024;
+        int max_header_size_ = 8 * 1024;
+        int max_connections_ = 10000;
 
         std::vector<std::unique_ptr<net::io_context>> io_contexts_;
         std::vector<std::unique_ptr<tcp::acceptor>>   acceptors_;
@@ -121,8 +115,9 @@ namespace brazier {
         std::atomic<int> connection_count_{ 0 };
         std::atomic<int> total_requests_{ 0 };
 
-        TlsConfig tls_;
-        bool      tls_config_from_user_ = false;
+        TicketKeyStore ticket_store_;
+        TlsConfig      tls_;
+        bool           tls_config_from_user_ = false;
 
         struct ConnectionGuard {
             HttpsServer& srv;
@@ -132,8 +127,6 @@ namespace brazier {
             ConnectionGuard(const ConnectionGuard&) = delete;
             ConnectionGuard& operator=(const ConnectionGuard&) = delete;
         };
-
-        brazier::TicketKeyStore ticket_store_;
 
     public:
         HttpsServer(const std::string& host, unsigned short port);
@@ -150,16 +143,15 @@ namespace brazier {
         unsigned short     getPort() const;
         const std::string& getHost() const;
 
-        int           getMaxConnections() const { return max_connections_; }
-        std::size_t   getMaxBodySize()    const { return max_body_size_; }
-        std::uint32_t getMaxHeaderSize()  const { return max_header_size_; }
-        std::size_t   getIoContextCount() const { return io_contexts_.size(); }
+        int getMaxConnections() const { return max_connections_; }
+        int getMaxBodySize()    const { return max_body_size_; }
+        int getMaxHeaderSize()  const { return max_header_size_; }
 
     private:
         void initializeConnections();
 
-        void load_tls_config_from_global();
         void load_common_config_from_global();
+        void load_tls_config_from_global();
         void load_limits_from_config();
 
         void configure_tls();
@@ -167,12 +159,8 @@ namespace brazier {
 
         void release_connection();
 
-        static std::size_t get_fd_limit();
-        static std::size_t get_system_memory_mb();
-        static int         get_worker_count();
-
-        static std::size_t   compute_max_body_size(std::size_t ram_mb, int max_conn);
-        static std::uint32_t compute_max_header_size(std::size_t ram_mb, int max_conn);
+        static int compute_max_body_size(int ram_mb, int max_conn);
+        static int compute_max_header_size(int ram_mb, int max_conn);
 
         net::awaitable<void> handle_connection(tcp::socket socket);
         net::awaitable<void> accept_loop(tcp::acceptor& acceptor);
