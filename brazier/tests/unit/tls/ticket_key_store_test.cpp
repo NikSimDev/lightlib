@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "../../../include/brazier/Tls/TicketKeyStore.hpp"
+#include "../../../include/brazier/TLS/TicketKeyStore.hpp"
 
 #include <openssl/evp.h>
 #include <openssl/ssl.h>
