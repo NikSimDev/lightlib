@@ -141,12 +141,6 @@ std::uint32_t brazier::HttpsServer::compute_max_header_size(
 void brazier::HttpsServer::load_tls_config_from_global() {
     if (tls_config_from_user_) return;
 
-    keep_alive_timeout_ = std::chrono::seconds(
-        global_config->get("keep-alive-timeout", 60));
-
-    handshake_timeout_ms_ = std::chrono::milliseconds(
-        global_config->get("https_server.tls.handshake_timeout_ms", 15000));
-
     tls_.cert_file = global_config->get("https_server.tls.cert_file",
         std::string("server.crt"));
     tls_.key_file = global_config->get("https_server.tls.key_file",
@@ -181,6 +175,11 @@ void brazier::HttpsServer::load_tls_config_from_global() {
         Logger::log("https_server.tls.conf not loaded: " + std::string(e.what()),
             "WARNING");
     }
+}
+
+void brazier::HttpsServer::load_common_config_from_global() {
+    keep_alive_timeout_ = std::chrono::seconds(
+        global_config->get("keep-alive-timeout", 60));
 }
 
 void brazier::HttpsServer::load_limits_from_config() {
@@ -271,13 +270,24 @@ void brazier::HttpsServer::configure_tls() {
         ssl::context::default_workarounds
         | ssl::context::no_sslv2
         | ssl::context::no_sslv3
+        | ssl::context::no_tlsv1
+        | ssl::context::no_tlsv1_1
         | ssl::context::single_dh_use);
 
     SSL_CTX_set_options(ssl_ctx_.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
 
+    SSL_CTX_set_cipher_list(
+        ssl_ctx_.native_handle(),
+        "ECDHE-ECDSA-AES128-GCM-SHA256:"
+        "ECDHE-RSA-AES128-GCM-SHA256:"
+        "ECDHE-ECDSA-AES256-GCM-SHA384:"
+        "ECDHE-RSA-AES256-GCM-SHA384:"
+        "ECDHE-ECDSA-CHACHA20-POLY1305:"
+        "ECDHE-RSA-CHACHA20-POLY1305");
+
     SSL_CTX_set_session_cache_mode(
         ssl_ctx_.native_handle(),
-        SSL_SESS_CACHE_SERVER);
+        SSL_SESS_CACHE_OFF);
 
     static const unsigned char sid_ctx[] = "brazier-https";
     SSL_CTX_set_session_id_context(
@@ -331,6 +341,7 @@ bool brazier::HttpsServer::initialize() {
             StorageManager::getInstance().setDefaultDriver(def);
         }
 
+        load_common_config_from_global();
         load_tls_config_from_global();
         load_limits_from_config();
         configure_tls();
@@ -697,12 +708,6 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 keep_alive = false;
             }
 
-            if (res.body().empty() && res.count(http::field::content_length) == 0) {
-                res.content_length(0);
-            }
-            else if (!res.body().empty() && res.count(http::field::content_length) == 0) {
-                res.content_length(res.body().size());
-            }
             res.prepare_payload();
 
             ec.clear();
@@ -733,13 +738,6 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 net::redirect_error(net::use_awaitable, sd_ec));
 
             sd_timer.cancel();
-
-            if (sd_ec && sd_ec != net::error::eof
-                && sd_ec != net::error::operation_aborted
-                && sd_ec != ssl::error::stream_truncated
-                && sd_ec != net::error::connection_reset
-                && sd_ec != net::error::broken_pipe) {
-            }
         }
 
         {

@@ -91,7 +91,6 @@ namespace brazier {
 
     private:
         std::chrono::seconds      keep_alive_timeout_{ 60 };
-        std::chrono::milliseconds handshake_timeout_ms_{ 15000 };
 
         std::size_t max_body_size_ = 1024 * 1024;
         std::uint32_t max_header_size_ = 8 * 1024;
@@ -160,6 +159,7 @@ namespace brazier {
         void initializeConnections();
 
         void load_tls_config_from_global();
+        void load_common_config_from_global();
         void load_limits_from_config();
 
         void configure_tls();

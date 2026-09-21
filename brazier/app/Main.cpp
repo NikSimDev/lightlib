@@ -25,44 +25,42 @@
 
 int main() {
     try {
-        //brazier::ConfigManager::initGlobal("config_test.json");
-        //brazier::global_config->setAutoSave(false);
-
-        //std::string https_server_host =
-        //    brazier::global_config->get("https_server.host", "0.0.0.0");
-        //int https_server_port =
-        //    brazier::global_config->get("https_server.port", 8443);
-
-        //brazier::Logger::log("HTTPS server: " + https_server_host + ":" +
-        //    std::to_string(https_server_port), "INFO");
-
-        //brazier::HttpsServer https_server(https_server_host, https_server_port);
-
-        //if (!https_server.initialize()) return 1;
-
-        //https_server.run();  
-
         brazier::ConfigManager::initGlobal("config_test.json");
         brazier::global_config->setAutoSave(false);
 
-        std::string server_host =
-            brazier::global_config->get("server.host", "0.0.0.0");
-        int server_port =
-            brazier::global_config->get("server.port", 3502);
+        std::string https_server_host =
+            brazier::global_config->get("https_server.host", "0.0.0.0");
+        int https_server_port =
+            brazier::global_config->get("https_server.port", 8443);
 
-        brazier::Logger::log("HTTP server: " + server_host + ":" +
-            std::to_string(server_port), "INFO");
+        brazier::Logger::log("HTTPS server: " + https_server_host + ":" +
+            std::to_string(https_server_port), "INFO");
 
-        brazier::Server server(server_host,
-            static_cast<unsigned short>(server_port));
+        brazier::HttpsServer https_server(https_server_host, https_server_port);
 
-        if (!server.initialize()) return 1;
+        if (!https_server.initialize()) return 1;
 
-        server.run();
+        https_server.run();  
 
-        return 0;
+        //brazier::ConfigManager::initGlobal("config_test.json");
+        //brazier::global_config->setAutoSave(false);
 
-        return 0;
+        //std::string server_host =
+        //    brazier::global_config->get("server.host", "0.0.0.0");
+        //int server_port =
+        //    brazier::global_config->get("server.port", 3502);
+
+        //brazier::Logger::log("HTTP server: " + server_host + ":" +
+        //    std::to_string(server_port), "INFO");
+
+        //brazier::Server server(server_host,
+        //    static_cast<unsigned short>(server_port));
+
+        //if (!server.initialize()) return 1;
+
+        //server.run();
+
+        //return 0;
     }
     catch (const std::exception& e) {
         std::cerr << "Fatal error: " << e.what() << std::endl;
