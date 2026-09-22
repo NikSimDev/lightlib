@@ -355,11 +355,16 @@ void brazier::HttpsServer::run() {
                 net::detached);
         }
 
-        Logger::log("Starting " + std::to_string(io_contexts_.size()) +
-            " HTTPS worker thread(s)", "INFO");
+        const int thread_count = platform::get_thread_count();
+        const int ctx_count = static_cast<int>(io_contexts_.size());
 
-        for (auto& io : io_contexts_) {
-            auto* io_ptr = io.get();
+        Logger::log("Starting " + std::to_string(thread_count) +
+            " HTTPS worker thread(s) over " +
+            std::to_string(ctx_count) + " io_context(s)",
+            "INFO");
+
+        for (int i = 0; i < thread_count; ++i) {
+            auto* io_ptr = io_contexts_[i % ctx_count].get();
             threads_.emplace_back([io_ptr] {
                 brazier::Engine::init(*io_ptr);
                 io_ptr->run();
@@ -593,12 +598,9 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             total_requests_.fetch_add(1, std::memory_order_relaxed);
             keep_alive = req.keep_alive();
 
-            res = {};
+            res.clear();    
             res.version(req.version());
             res.keep_alive(keep_alive);
-            res.set(http::field::connection, keep_alive ? "keep-alive" : "close");
-            res.set(http::field::server, "brazier");
-            res.set(http::field::strict_transport_security, "max-age=31536000");
 
             try {
                 co_await Router::handle_request(req, res);
@@ -613,12 +615,35 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
 
             res.prepare_payload();
 
+            std::string flat;
+            flat.reserve(512 + res.body().size());
+
+            flat += "HTTP/1.1 ";
+            flat += std::to_string(res.result_int());
+            flat += ' ';
+            flat += res.reason();
+            flat += "\r\n";
+
+            flat += "Server: brazier\r\n";
+            flat += "Strict-Transport-Security: max-age=31536000\r\n";
+            flat += "Connection: ";
+            flat += keep_alive ? "keep-alive\r\n" : "close\r\n";
+
+            for (const auto& field : res.base()) {
+                flat += field.name_string();
+                flat += ": ";
+                flat += field.value();
+                flat += "\r\n";
+            }
+            flat += "\r\n";
+            flat += res.body();
+
             ec.clear();
-            co_await http::async_write(
-                stream, res,
+            co_await net::async_write(
+                stream, net::buffer(flat),
                 net::redirect_error(net::use_awaitable, ec));
 
-            if (ec) break;
+            if (ec) break;;
 
             buffer.consume(buffer.size());
             if (!keep_alive) break;

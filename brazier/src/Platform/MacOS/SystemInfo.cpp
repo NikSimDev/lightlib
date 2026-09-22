@@ -35,4 +35,8 @@ namespace brazier::platform {
         return (n > 0) ? n : 1;
     }
 
+    int get_thread_count() noexcept {
+        const int n = static_cast<int>(std::thread::hardware_concurrency());
+        return (n > 0) ? n : 1;
+    }
 }

@@ -22,26 +22,31 @@
 #include "../include/brazier/DB"
 #include "../include/brazier/Http"
 #include "../include/brazier/Engine.hpp"
+#include "BenchmarkController.cpp"
+
+using namespace brazier;
 
 int main() {
     try {
+        auto benchmark_controller = std::make_shared<BenchmarkController>();
+
+        R(GET, "/test", benchmark_controller, test);
+
         brazier::ConfigManager::initGlobal("config_test.json");
         brazier::global_config->setAutoSave(false);
-
         std::string https_server_host =
             brazier::global_config->get("https_server.host", "0.0.0.0");
         int https_server_port =
             brazier::global_config->get("https_server.port", 8443);
-
         brazier::Logger::log("HTTPS server: " + https_server_host + ":" +
             std::to_string(https_server_port), "INFO");
 
         brazier::HttpsServer https_server(https_server_host, https_server_port);
 
         if (!https_server.initialize()) return 1;
+        https_server.run(); 
 
-        https_server.run();  
-
+        return 0;
         //brazier::ConfigManager::initGlobal("config_test.json");
         //brazier::global_config->setAutoSave(false);
 
