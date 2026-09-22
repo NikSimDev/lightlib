@@ -263,50 +263,61 @@ bool brazier::HttpsServer::initialize() {
         configure_tls();
 
         const tcp::endpoint endpoint(net::ip::make_address(host_), port_);
-        const int worker_count = platform::get_worker_count();
 
-        io_contexts_.reserve(worker_count);
-        acceptors_.reserve(worker_count);
-        work_guards_.reserve(worker_count);
+        const int n = platform::get_thread_count();
+        const bool split_accept = !platform::has_reuse_port();
+        const int io_count = n;
 
-        for (int i = 0; i < worker_count; ++i) {
+        io_contexts_.reserve(io_count);
+        work_guards_.reserve(io_count);
+        acceptors_.reserve(split_accept ? 1 : io_count);
+
+        for (int i = 0; i < io_count; ++i) {
             auto io = std::make_unique<net::io_context>();
-            auto acc = std::make_unique<tcp::acceptor>(*io);
 
-            acc->open(endpoint.protocol());
-            acc->set_option(tcp::acceptor::reuse_address(true));
+            const bool needs_acceptor = !split_accept || (i == 0);
 
-            const auto native = static_cast<platform::NativeSocket>(
-                acc->native_handle());
+            if (needs_acceptor) {
+                auto acc = std::make_unique<tcp::acceptor>(*io);
+                acc->open(endpoint.protocol());
+                acc->set_option(tcp::acceptor::reuse_address(true));
 
-            if (!platform::set_reuse_port(native) && platform::has_reuse_port()) {
-                Logger::log("SO_REUSEPORT setsockopt failed on worker " +
-                    std::to_string(i), "WARNING");
+                const auto native = static_cast<platform::NativeSocket>(
+                    acc->native_handle());
+
+                if (!platform::set_reuse_port(native)
+                    && platform::has_reuse_port()) {
+                    Logger::log("SO_REUSEPORT setsockopt failed on worker " +
+                        std::to_string(i), "WARNING");
+                }
+
+                if (!platform::set_defer_accept(native, 1)
+                    && platform::has_defer_accept()) {
+                    Logger::log("TCP_DEFER_ACCEPT setsockopt failed on worker " +
+                        std::to_string(i), "WARNING");
+                }
+
+                acc->bind(endpoint);
+                acc->listen(boost::asio::socket_base::max_listen_connections);
+                acceptors_.push_back(std::move(acc));
             }
-
-            if (!platform::set_defer_accept(native, 1)
-                && platform::has_defer_accept()) {
-                Logger::log("TCP_DEFER_ACCEPT setsockopt failed on worker " +
-                    std::to_string(i), "WARNING");
-            }
-
-            acc->bind(endpoint);
-            acc->listen(boost::asio::socket_base::max_listen_connections);
 
             work_guards_.push_back(std::make_unique<
                 net::executor_work_guard<net::io_context::executor_type>>(
                     io->get_executor()));
 
             io_contexts_.push_back(std::move(io));
-            acceptors_.push_back(std::move(acc));
         }
 
         initializeConnections();
         RouterRegisterer::init(*io_contexts_[0]);
 
         Logger::log("HTTPS server initialized on " + host_ + ":" +
-            std::to_string(port_) + " [TLS, workers=" +
-            std::to_string(worker_count) + ", SO_REUSEPORT=" +
+            std::to_string(port_) + " [TLS, io_contexts=" +
+            std::to_string(io_count) + ", acceptors=" +
+            std::to_string(acceptors_.size()) + ", dispatch=" +
+            (split_accept ? "round-robin" : "SO_REUSEPORT") +
+            ", SO_REUSEPORT=" +
             (platform::has_reuse_port() ? "yes" : "no") +
             ", TCP_DEFER_ACCEPT=" +
             (platform::has_defer_accept() ? "yes" : "no") +
@@ -349,22 +360,30 @@ void brazier::HttpsServer::initializeConnections() {
 
 void brazier::HttpsServer::run() {
     try {
-        for (int i = 0; i < static_cast<int>(io_contexts_.size()); ++i) {
-            net::co_spawn(*io_contexts_[i],
-                accept_loop(*acceptors_[i]),
+        const int io_count = static_cast<int>(io_contexts_.size());
+        const bool split_accept = !platform::has_reuse_port();
+
+        if (split_accept) {
+            net::co_spawn(*io_contexts_[0],
+                accept_and_dispatch(*acceptors_[0], 0),
                 net::detached);
         }
+        else {
+            for (int i = 0; i < io_count; ++i) {
+                net::co_spawn(*io_contexts_[i],
+                    accept_loop(*acceptors_[i]),
+                    net::detached);
+            }
+        }
 
-        const int thread_count = platform::get_thread_count();
-        const int ctx_count = static_cast<int>(io_contexts_.size());
-
-        Logger::log("Starting " + std::to_string(thread_count) +
-            " HTTPS worker thread(s) over " +
-            std::to_string(ctx_count) + " io_context(s)",
+        Logger::log("Starting " + std::to_string(io_count) +
+            " io_context(s) over " + std::to_string(io_count) +
+            " thread(s), dispatch=" +
+            (split_accept ? "round-robin" : "SO_REUSEPORT"),
             "INFO");
 
-        for (int i = 0; i < thread_count; ++i) {
-            auto* io_ptr = io_contexts_[i % ctx_count].get();
+        for (auto& io : io_contexts_) {
+            auto* io_ptr = io.get();
             threads_.emplace_back([io_ptr] {
                 brazier::Engine::init(*io_ptr);
                 io_ptr->run();
@@ -405,6 +424,49 @@ void brazier::HttpsServer::run() {
     catch (const std::exception& e) {
         Logger::log("HTTPS server run failed: " + std::string(e.what()), "ERROR");
         throw;
+    }
+}
+
+net::awaitable<void> brazier::HttpsServer::accept_and_dispatch(
+    tcp::acceptor& acceptor, int worker_begin)
+{
+    const int worker_count = static_cast<int>(io_contexts_.size()) - worker_begin;
+    int next = 0;
+
+    for (;;) {
+        if (shutting_down_.load(std::memory_order_acquire)) {
+            co_return;
+        }
+
+        beast::error_code ec;
+        tcp::socket socket = co_await acceptor.async_accept(
+            net::redirect_error(net::use_awaitable, ec));
+
+        if (ec) {
+            if (ec == net::error::operation_aborted ||
+                shutting_down_.load(std::memory_order_acquire)) {
+                co_return;
+            }
+            Logger::log("Accept error: " + ec.message(), "ERROR");
+            continue;
+        }
+
+        const int prev = connection_count_.fetch_add(1, std::memory_order_acq_rel);
+        if (prev >= max_connections_) {
+            connection_count_.fetch_sub(1, std::memory_order_acq_rel);
+            Logger::log("Connection limit reached (" +
+                std::to_string(prev) + "/" +
+                std::to_string(max_connections_) + "), rejecting", "WARNING");
+            boost::system::error_code ignore;
+            socket.close(ignore);
+            continue;
+        }
+
+        const int idx = worker_begin + (next++ % worker_count);
+
+        net::co_spawn(*io_contexts_[idx],
+            handle_connection(std::move(socket)),
+            net::detached);
     }
 }
 

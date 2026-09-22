@@ -10,4 +10,8 @@ namespace brazier::platform {
 
     int get_thread_count() noexcept;
 
+    bool has_reuse_port() noexcept; 
+
+    int get_io_context_count() noexcept;
+
 }

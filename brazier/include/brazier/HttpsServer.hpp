@@ -93,7 +93,7 @@ namespace brazier {
         std::vector<std::unique_ptr<net::io_context>> io_contexts_;
         std::vector<std::unique_ptr<tcp::acceptor>>   acceptors_;
         std::vector<std::unique_ptr<
-            net::executor_work_guard<net::io_context::executor_type>>> work_guards_;
+        net::executor_work_guard<net::io_context::executor_type>>> work_guards_;
 
         ssl::context ssl_ctx_{ ssl::context::tls_server };
 
@@ -164,6 +164,7 @@ namespace brazier {
 
         net::awaitable<void> handle_connection(tcp::socket socket);
         net::awaitable<void> accept_loop(tcp::acceptor& acceptor);
+        net::awaitable<void> accept_and_dispatch(tcp::acceptor& acceptor, int worker_begin);
     };
 
 }
