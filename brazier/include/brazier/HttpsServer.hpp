@@ -51,6 +51,9 @@
 #include <vector>
 #include <optional>
 
+#include "Platform/SocketOptions.hpp"
+#include "Platform/SystemInfo.hpp"
+
 #include "TLS/TicketKeyStore.hpp"
 #include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
@@ -77,7 +80,7 @@ namespace brazier {
             std::string cert_file;
             std::string key_file;
             std::string ca_file;
-            std::string cert_pem;   
+            std::string cert_pem;
             std::string key_pem;
 
             std::vector<std::pair<std::string, std::string>> conf;
@@ -98,10 +101,10 @@ namespace brazier {
         std::vector<std::unique_ptr<net::io_context>> io_contexts_;
         std::vector<std::unique_ptr<tcp::acceptor>>   acceptors_;
         std::vector<std::unique_ptr<
-        net::executor_work_guard<net::io_context::executor_type>>> work_guards_;
+            net::executor_work_guard<net::io_context::executor_type>>> work_guards_;
 
         std::shared_ptr<ssl::context> ssl_ctx_;
-        std::shared_mutex ssl_ctx_mutex_;
+        std::shared_mutex             ssl_ctx_mutex_;
 
         std::thread       stats_thread_;
         std::atomic<bool> shutdown_flag_{ false };
@@ -169,12 +172,12 @@ namespace brazier {
         void load_tls_config_from_global();
         void load_limits_from_config();
 
-        void configure_tls();      
-        void configure_ssl_ctx(ssl::context& ctx);  
-        void apply_ssl_conf(ssl::context& ctx);     
+        void configure_tls();
+        void configure_ssl_ctx(ssl::context& ctx);
+        void apply_ssl_conf(ssl::context& ctx);
         void load_cert_from_memory(ssl::context& ctx,
-                                    const std::string& cert_pem,
-                                    const std::string& key_pem);  
+            const std::string& cert_pem,
+            const std::string& key_pem);
 
         std::shared_ptr<ssl::context> get_ssl_ctx();
 
