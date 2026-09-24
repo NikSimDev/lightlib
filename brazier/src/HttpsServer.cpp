@@ -72,6 +72,18 @@ void brazier::HttpsServer::load_common_config_from_global() {
     keep_alive_timeout_ = std::chrono::seconds(
         global_config->get("http.keep_alive_timeout",
             global_config->get("keep-alive-timeout", 60)));
+
+    server_name_ = global_config->get("http.server_name",
+        std::string("brazier"));
+    hsts_enabled_ = global_config->get("http.hsts_enabled", true);
+    hsts_header_ = global_config->get("http.hsts_header",
+        std::string("max-age=31536000"));
+
+    static_headers_.clear();
+    static_headers_ += "Server: " + server_name_ + "\r\n";
+    if (hsts_enabled_) {
+        static_headers_ += "Strict-Transport-Security: " + hsts_header_ + "\r\n";
+    }
 }
 
 void brazier::HttpsServer::load_tls_config_from_global() {
@@ -813,7 +825,7 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             total_requests_.fetch_add(1, std::memory_order_relaxed);
             keep_alive = req.keep_alive();
 
-            res.clear();    
+            res.clear();
             res.version(req.version());
             res.keep_alive(keep_alive);
 
@@ -831,7 +843,7 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             res.prepare_payload();
 
             std::string flat;
-            flat.reserve(512 + res.body().size());
+            flat.reserve(256 + static_headers_.size() + res.body().size());
 
             flat += "HTTP/1.1 ";
             flat += std::to_string(res.result_int());
@@ -839,8 +851,8 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
             flat += res.reason();
             flat += "\r\n";
 
-            flat += "Server: brazier\r\n";
-            flat += "Strict-Transport-Security: max-age=31536000\r\n";
+            flat += static_headers_;
+
             flat += "Connection: ";
             flat += keep_alive ? "keep-alive\r\n" : "close\r\n";
 
@@ -858,7 +870,7 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
                 stream, net::buffer(flat),
                 net::redirect_error(net::use_awaitable, ec));
 
-            if (ec) break;;
+            if (ec) break;
 
             buffer.consume(buffer.size());
             if (!keep_alive) break;

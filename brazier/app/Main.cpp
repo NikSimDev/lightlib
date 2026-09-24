@@ -22,7 +22,7 @@
 #include "../include/brazier/DB"
 #include "../include/brazier/Http"
 #include "../include/brazier/Engine.hpp"
-#include "BenchmarkController.cpp"
+#include "BenchmarkController.hpp"
 
 using namespace brazier;
 

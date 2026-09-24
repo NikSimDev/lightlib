@@ -134,6 +134,12 @@ namespace brazier {
             ConnectionGuard& operator=(const ConnectionGuard&) = delete;
         };
 
+        std::string server_name_ = "brazier";
+        std::string hsts_header_ = "max-age=31536000";
+        bool        hsts_enabled_ = true;
+
+        std::string static_headers_;
+
     public:
         HttpsServer(const std::string& host, unsigned short port);
         HttpsServer(const std::string& host, unsigned short port,
