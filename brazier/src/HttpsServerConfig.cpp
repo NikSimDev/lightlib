@@ -54,13 +54,13 @@ int brazier::HttpsServer::compute_max_header_size(int ram_mb, int max_conn) {
 
 void brazier::HttpsServer::load_common_config_from_global() {
     keep_alive_timeout_ = std::chrono::seconds(
-        global_config->get("http.keep_alive_timeout",
-            global_config->get("keep-alive-timeout", 60)));
+        global_config->get("protocol.keep_alive_timeout", 60));
 
-    server_name_ = global_config->get("http.server_name",
+    server_name_ = global_config->get("protocol.server_name",
         std::string("brazier"));
-    hsts_enabled_ = global_config->get("http.hsts_enabled", true);
-    hsts_header_ = global_config->get("http.hsts_header",
+
+    hsts_enabled_ = global_config->get("https_server.hsts.enabled", true);
+    hsts_header_ = global_config->get("https_server.hsts.header",
         std::string("max-age=31536000"));
 
     static_headers_.clear();
@@ -120,11 +120,11 @@ void brazier::HttpsServer::load_limits_from_config() {
     const int ram_mb = platform::get_system_memory_mb();
 
     const int testing_conn =
-        global_config->get("http.max_connections_testing", 0);
+        global_config->get("protocol.max_connections_testing", 0);
     const int testing_body =
-        global_config->get("http.max_body_size_testing", 0);
+        global_config->get("protocol.max_body_size_testing", 0);
     const int testing_hdr =
-        global_config->get("http.max_header_size_testing", 0);
+        global_config->get("protocol.max_header_size_testing", 0);
 
     const bool testing_mode =
         testing_conn > 0 || testing_body > 0 || testing_hdr > 0;
@@ -132,7 +132,7 @@ void brazier::HttpsServer::load_limits_from_config() {
     if (testing_conn > 0) {
         max_connections_ = testing_conn;
     }
-    else if (int v = global_config->get("http.max_connections", 0); v > 0) {
+    else if (int v = global_config->get("protocol.max_connections", 0); v > 0) {
         max_connections_ = v;
     }
     else {
@@ -143,7 +143,7 @@ void brazier::HttpsServer::load_limits_from_config() {
     if (testing_body > 0) {
         max_body_size_ = testing_body;
     }
-    else if (int v = global_config->get("http.max_body_size", 0); v > 0) {
+    else if (int v = global_config->get("protocol.max_body_size", 0); v > 0) {
         max_body_size_ = v;
     }
     else {
@@ -153,7 +153,7 @@ void brazier::HttpsServer::load_limits_from_config() {
     if (testing_hdr > 0) {
         max_header_size_ = testing_hdr;
     }
-    else if (int v = global_config->get("http.max_header_size", 0); v > 0) {
+    else if (int v = global_config->get("protocol.max_header_size", 0); v > 0) {
         max_header_size_ = v;
     }
     else {

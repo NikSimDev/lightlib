@@ -59,15 +59,12 @@ endif()
 
 message(STATUS "brazier: platform = ${BRAZIER_PLATFORM_DIR}")
 
-file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS
-    "src/*.cpp"
-)
+file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS "src/*.cpp")
 
 list(FILTER PROJECT_SOURCES EXCLUDE REGEX "^src/Platform/")
 
-file(GLOB BRAZIER_PLATFORM_SOURCES CONFIGURE_DEPENDS
-    "src/Platform/${BRAZIER_PLATFORM_DIR}/*.cpp"
-)
+file(GLOB_RECURSE BRAZIER_PLATFORM_SOURCES CONFIGURE_DEPENDS
+    "src/Platform/${BRAZIER_PLATFORM_DIR}/*.cpp")
 
 if(NOT BRAZIER_PLATFORM_SOURCES)
     message(FATAL_ERROR
@@ -78,18 +75,22 @@ list(APPEND PROJECT_SOURCES ${BRAZIER_PLATFORM_SOURCES})
 
 list(FILTER PROJECT_SOURCES EXCLUDE REGEX "app/Main\\.cpp$")
 
-add_library(brazier_objects OBJECT ${PROJECT_SOURCES})
-
-foreach(other_platform Linux MacOS Windows)
-    if(NOT other_platform STREQUAL BRAZIER_PLATFORM_DIR)
-        file(GLOB OTHER_SOURCES "src/Platform/${other_platform}/*.cpp")
-        if(OTHER_SOURCES)
-            set_source_files_properties(${OTHER_SOURCES}
-                PROPERTIES HEADER_FILE_ONLY TRUE
-            )
-        endif()
+function(brazier_hide_platform platform)
+    if(platform STREQUAL BRAZIER_PLATFORM_DIR)
+        return()
     endif()
-endforeach()
+    file(GLOB_RECURSE OTHER "src/Platform/${platform}/*.cpp")
+    if(OTHER)
+        set_source_files_properties(${OTHER}
+            PROPERTIES HEADER_FILE_ONLY TRUE)
+    endif()
+endfunction()
+
+brazier_hide_platform(Linux)
+brazier_hide_platform(MacOS)
+brazier_hide_platform(Windows)
+
+add_library(brazier_objects OBJECT ${PROJECT_SOURCES})
 
 target_link_libraries(brazier_objects PUBLIC Boost::boost)
 
@@ -250,11 +251,6 @@ if(BUILD_TESTS)
         GTest::gmock_main
         ${LIBRARIES}
     )
-
-    # include(GoogleTest)
-    # gtest_discover_tests(brazier_tests)
-
-    # add_test(NAME brazier_tests COMMAND brazier_tests)
 
     add_custom_target(check
         COMMAND $<TARGET_FILE:brazier_tests>
