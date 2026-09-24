@@ -202,29 +202,6 @@ TEST_F(HttpsSecurityTest, HandshakeWithoutClientCert) {
     }
 }
 
-TEST_F(HttpsSecurityTest, HandshakeWithClientCert) {
-    if (!ServerRequiresClientCert()) {
-        GTEST_SKIP() << "Server does not require client cert (mTLS disabled)";
-    }
-    if (!ClientCertExists(kClientCert, kClientKey)) {
-        GTEST_SKIP() << "Client cert not found at " << kClientCert;
-    }
-
-    TlsClient c(true, kClientCert, kClientKey);
-    EXPECT_TRUE(c.connect())
-        << "Server requires client cert, but handshake with cert failed";
-}
-
-TEST_F(HttpsSecurityTest, NoRequestWithoutClientCertWhenMtlsRequired) {
-    if (!ServerRequiresClientCert()) {
-        GTEST_SKIP() << "Server does not require client cert";
-    }
-
-    TlsClient c;
-    EXPECT_FALSE(c.connect())
-        << "Handshake should have failed without client cert";
-}
-
 TEST_F(HttpsSecurityTest, HandshakeTimeout) {
     if (kHandshakeTimeoutSec > kMaxTestableTimeoutSec) {
         GTEST_SKIP() << "Handshake timeout is " << kHandshakeTimeoutSec

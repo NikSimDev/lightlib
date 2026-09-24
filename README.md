@@ -495,14 +495,21 @@ both — is a matter of a couple of lines in your `main`.
 ### Features
 
 - **TLS 1.2 / 1.3** by default, with per-server override via `conf`
+- **Session resumption** via RFC 5077 tickets with automatic key rotation
+- **Hot-reload** of certificates without restarting the server
 - **SNI-aware** (Server Name Indication) — future multi-cert scenarios are possible
 - **HSTS** header sent automatically on every response
 - **Keep-alive** over TLS with configurable idle timeout
 - **Graceful shutdown** with `close_notify` and 5-second shutdown timeout
 - **Handshake timeout** to protect against Slowloris-style attacks
 - **mTLS** (mutual TLS / client certificates) with custom CA
-- **Raw OpenSSL tuning** through `SSL_CONF_cmd` — no code changes needed for cipher / protocol changes
-- **Same Router / Engine / Middleware** as the HTTP server — routing code is transport-agnostic
+- **Multi-io_context** — N worker threads, one per CPU core
+- **`SO_REUSEPORT`** on Linux/macOS, round-robin dispatch on Windows
+- **`TCP_DEFER_ACCEPT`** on Linux — less wake-ups, more throughput
+- **Dynamic limits** — body size, header size, connection count auto-tuned to hardware
+- **Raw OpenSSL tuning** through `SSL_CONF_cmd` — no code changes for cipher / protocol changes
+- **Certificate from file OR from memory (PEM string)** — for Vault, K8s secrets, etc.
+- **Same Router / Engine / Middleware** as the HTTP server — routing is transport-agnostic
 
 ### Requirements
 
@@ -533,6 +540,12 @@ Add an `https_server` section to your `config.json` alongside the existing `serv
       "handshake_timeout": 15,
       "conf": []
     }
+  },
+  "http": {
+    "keep_alive_timeout": 60,
+    "max_connections": 50000,
+    "max_body_size": 1048576,
+    "max_header_size": 8192
   }
 }
 ```
@@ -543,6 +556,8 @@ Add an `https_server` section to your `config.json` alongside the existing `serv
 |------------------------|-----------|-----------|-------------|
 | `cert_file`            | `string`  | `server.crt` | Path to PEM certificate chain (leaf + intermediates) |
 | `key_file`             | `string`  | `server.key` | Path to PEM private key |
+| `cert_pem`             | `string`  | `""`      | Certificate as in-memory PEM string (overrides `cert_file`) |
+| `key_pem`              | `string`  | `""`      | Private key as in-memory PEM string (overrides `key_file`) |
 | `ca_file`              | `string`  | `""`      | Path to CA bundle — only needed for mTLS |
 | `require_client_cert`  | `bool`    | `false`   | Reject connections without a client certificate |
 | `verify_client_cert`   | `bool`    | `false`   | Verify client certificate if presented (but don't require) |
@@ -554,6 +569,29 @@ Add an `https_server` section to your `config.json` alongside the existing `serv
 > from the project root, or use absolute paths. On Windows, always use forward slashes
 > (`"C:/certs/server.crt"`) — backslashes are escape characters in JSON.
 
+#### HTTP section reference
+
+Global HTTP limits used by both HTTP and HTTPS servers.
+
+| Key                    | Type      | Default      | Description |
+|------------------------|-----------|--------------|-------------|
+| `keep_alive_timeout`   | `int`     | `60`         | Seconds to keep an idle connection open (also accepts legacy `keep-alive-timeout` at top level) |
+| `max_connections`      | `int`     | `ulimit×0.8` | Max simultaneous connections; if not set, derived from `RLIMIT_NOFILE` |
+| `max_body_size`        | `int`     | auto         | Max request body in bytes; auto-derived from RAM and `max_connections` if not set |
+| `max_header_size`      | `int`     | auto         | Max total request header size; auto-derived from RAM and `max_connections` |
+| `max_connections_testing` | `int`  | `0`          | Test-only override for `max_connections` |
+| `max_body_size_testing`   | `int`  | `0`          | Test-only override for `max_body_size` |
+| `max_header_size_testing` | `int`  | `0`          | Test-only override for `max_header_size` |
+
+**Auto-derived limits** work like this:
+
+- `max_connections` = `RLIMIT_NOFILE × 0.8` (POSIX) or `16384 × 0.8` (Windows)
+- `max_body_size` = `(RAM × 25%) / max_connections`, clamped to `[64 KB, 16 MB]`
+- `max_header_size` = `(RAM × 1%) / max_connections`, clamped to `[4 KB, 32 KB]`
+
+Any explicit value in the config overrides the auto-derivation. The `_testing` keys take
+highest priority and are only meant for the test suite.
+
 ### Generating certificates
 
 #### Development (self-signed)
@@ -563,6 +601,16 @@ The simplest way to get a working dev certificate — a self-signed cert valid f
 ```bash
 mkdir -p app/certs
 openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
+    -keyout app/certs/server.key \
+    -out app/certs/server.crt \
+    -subj "/CN=localhost" \
+    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+```
+
+For an ECDSA P-256 certificate (smaller, faster handshake — recommended for internal services):
+
+```bash
+openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -days 365 -nodes \
     -keyout app/certs/server.key \
     -out app/certs/server.crt \
     -subj "/CN=localhost" \
@@ -657,9 +705,6 @@ instances with different certificates:
 brazier::HttpsServer::TlsConfig tls;
 tls.cert_file = "/var/lib/myapp/api.crt";
 tls.key_file  = "/var/lib/myapp/api.key";
-tls.conf = {
-    { "min_protocol", "TLSv1.3" }
-};
 tls.handshake_timeout = std::chrono::seconds(10);
 
 brazier::HttpsServer api("0.0.0.0", 9443, tls);
@@ -669,6 +714,145 @@ api.run();
 
 When `TlsConfig` is passed explicitly, `https_server.tls.*` from the JSON is ignored
 entirely — the code-level config wins.
+
+### Loading certificates from memory (PEM strings)
+
+If your certificate comes from a secret manager, an environment variable, or any source
+other than a local file, populate `cert_pem` / `key_pem` instead of `cert_file` / `key_file`:
+
+```cpp
+brazier::HttpsServer::TlsConfig tls;
+tls.cert_pem = std::getenv("TLS_CERT_PEM");   // full PEM chain
+tls.key_pem  = std::getenv("TLS_KEY_PEM");    // PEM private key
+
+brazier::HttpsServer server("0.0.0.0", 8443, tls);
+server.initialize();
+```
+
+`cert_pem` may contain **the full chain** (leaf + intermediates) — Brazier parses and
+registers each certificate automatically. `key_pem` must be the matching private key;
+the pair is validated with `SSL_CTX_check_private_key` at load time.
+
+> **`cert_pem` takes priority over `cert_file`.** If both are set, the memory copy wins.
+> This lets you supply a file path for hot-reload **and** a cached PEM for the initial
+> load — but note that `reloadTls()` needs `cert_file`/`key_file` to be set to know where
+> to re-read from.
+
+### Hot-reload of TLS certificates
+
+Reload certificates without restarting the server or dropping existing connections:
+
+```cpp
+// Re-read files (cert_file / key_file must be set)
+server.reloadTls();
+
+// Or explicitly supply a new config — useful for Vault / K8s / DB sources
+brazier::HttpsServer::TlsConfig new_tls = server.getTlsConfig();
+new_tls.cert_pem = fetchPemFromVault("tls/server.crt");
+new_tls.key_pem  = fetchPemFromVault("tls/server.key");
+server.reloadTls(new_tls);
+```
+
+**Guarantees:**
+
+- Existing connections continue on the **old** `SSL_CTX` and finish normally.
+- New handshakes use the **new** `SSL_CTX`.
+- If the new config is invalid, the operation fails and the **old** `SSL_CTX` stays
+  active — the server is never left in a broken state.
+- Session ticket keys (`TicketKeyStore`) are shared across contexts, so resumption
+  continues to work across reloads.
+
+**Common patterns:**
+
+```cpp
+// 1. Console command
+std::thread([&server] {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+        if (line == "reload") server.reloadTls();
+        if (line == "quit")   server.stop();
+    }
+}).detach();
+
+// 2. SIGHUP (Linux / macOS)
+std::signal(SIGHUP, [](int) {
+    g_reload_requested.store(true, std::memory_order_release);
+});
+// ... in a background thread ...
+if (g_reload_requested.exchange(false)) server.reloadTls();
+
+// 3. File watcher
+std::thread([&server] {
+    fs::file_time_type last{};
+    while (server.running()) {
+        auto now = fs::last_write_time("app/certs/server.crt");
+        if (last != fs::file_time_type{} && now != last) {
+            server.reloadTls();
+        }
+        last = now;
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+    }
+}).detach();
+```
+
+### Session resumption
+
+Brazier uses **stateless session tickets** (RFC 5077) — no per-session state is kept on
+the server. This is the only mechanism that works in TLS 1.3, and it's the recommended
+mechanism for TLS 1.2 too.
+
+Tickets are encrypted with rotating keys managed by `TicketKeyStore`:
+
+- **Rotation interval** — a new key every 12 hours.
+- **Key lifetime** — old keys kept for 48 hours, so clients with valid tickets can still
+  resume.
+- **Thread-safe** — one store per `HttpsServer`; multiple servers in the same process
+  have independent stores.
+
+Resumption typically costs **0.3–0.8 ms** vs **2–3 ms** for a full handshake — roughly a
+10× CPU reduction on resumed sessions. This matters most for connection-churn workloads
+(REST APIs behind a proxy, health checks).
+
+
+### Threading model
+
+On startup, `HttpsServer` creates **N io_context instances, one per CPU core**:
+
+| Platform | io_contexts | Acceptors | Dispatch |
+|---|---|---|---|
+| Linux / macOS | `hardware_concurrency()` | Same as io_contexts | `SO_REUSEPORT` — kernel hashes 4-tuples |
+| Windows | `hardware_concurrency()` | 1 | round-robin `co_spawn` from a single acceptor |
+
+Each io_context has its own thread. Each thread has its own IOCP (Windows) or epoll
+instance (Linux). There is **no cross-thread signalling** on the hot path — completions
+for a connection always run on the same thread that owns its io_context.
+
+The startup log tells you exactly what happened:
+
+```
+[SUCCESS] HTTPS server initialized on 0.0.0.0:8443 [TLS, io_contexts=12, acceptors=1, dispatch=round-robin, SO_REUSEPORT=no, TCP_DEFER_ACCEPT=no]
+[INFO] Starting 12 io_context(s) over 12 thread(s), dispatch=round-robin
+```
+
+On Linux expect `io_contexts=N, acceptors=N, dispatch=SO_REUSEPORT`. On Windows expect
+`io_contexts=N, acceptors=1, dispatch=round-robin`.
+
+### Dynamic limits
+
+Body size, header size, and connection count are all auto-tuned to the host hardware at
+startup, unless overridden in `config.json`:
+
+```
+[WARNING] [TESTING] Final HTTP limits: max_connections=20, max_body=1024KB, max_header=8KB (RAM=15611MB)
+[INFO] Final HTTP limits: max_connections=50000, max_body=2097152KB, max_header=16KB (RAM=16384MB)
+```
+
+Auto-derivation uses `RLIMIT_NOFILE` for connection count and total RAM for body/header
+caps. If you set any of `http.max_connections`, `http.max_body_size`, or
+`http.max_header_size` explicitly, that value wins.
+
+The `_testing` variants take absolute priority — they exist so the test suite can enforce
+small limits without touching the prod config.
 
 ### Mutual TLS (mTLS)
 
@@ -729,11 +913,30 @@ You don't need to set these in your controllers.
 | Phase | Timeout | Config key |
 |---|---|---|
 | TLS handshake | 15 s | `https_server.tls.handshake_timeout` |
-| Idle keep-alive | 60 s | `keep-alive-timeout` (top-level) |
+| Idle keep-alive | 60 s | `http.keep_alive_timeout` (or legacy `keep-alive-timeout`) |
 | Graceful TLS shutdown | 5 s | — |
+| Graceful server shutdown | 10 s | — |
 
 If any of these fire, the connection is closed cleanly — you'll see a corresponding
 `[DEBUG] HTTPS client disconnected` line in the log, not an error.
+
+### Shutting down
+
+```cpp
+server.stop();   // returns after all in-flight connections complete (up to 10 s)
+```
+
+`stop()` performs a graceful shutdown:
+
+1. Acceptors closed — no new connections.
+2. `work_guard` released — `io_context::run()` will exit when idle.
+3. Waits up to **10 seconds** for `connection_count` to reach zero.
+4. `io_context::stop()` — force-cancels anything still running.
+5. Worker threads joined.
+
+If `run()` is executing on a different thread, join that thread **after** `stop()` returns.
+Do **not** call `stop()` from inside a request handler — it will deadlock waiting for
+the calling connection to close.
 
 ### Testing TLS
 
@@ -752,6 +955,11 @@ openssl s_client -connect localhost:8443 -servername localhost
 # Verify TLS 1.1 is rejected
 openssl s_client -connect localhost:8443 -tls1_1
 ```
+
+> **Windows `curl.exe` uses Schannel and does not support ECDSA server certificates.**
+> If your cert is ECDSA P-256, use `Git for Windows`'s curl (which links against OpenSSL),
+> or stick to `openssl s_client` for testing. `ab` (ApacheBench) uses its own OpenSSL and
+> works with both cert types.
 
 From brazier's own test suite:
 
@@ -775,10 +983,19 @@ net::awaitable<void> fetch_secure() {
   relative to the process's *current working directory*, not the config file. Run from the
   project root or use absolute paths.
 
+- **`Certificate/private key mismatch`** — the cert and key in `cert_file` / `key_file`
+  don't belong to the same pair, or the key was regenerated without regenerating the cert.
+  Brazier rejects this at startup with a clear error.
+
 - **`SSL_CONF_cmd failed for 'min_protocol=...'`** — some OpenSSL builds (particularly
   via vcpkg) don't register `min_protocol` in `SSL_CONF_cmd`. Brazier handles this internally
   by calling `SSL_CTX_set_min_proto_version` directly — the `conf` entry is a no-op there,
   but you can safely keep it for documentation purposes.
+
+- **`no shared cipher` / `alert 40` on handshake** — the client and server can't agree on
+  a cipher suite. Most often: the client is offering only RSA suites while your cert is ECDSA
+  (or vice versa). Check the certificate type with
+  `openssl x509 -in cert.crt -noout -text | findstr "Public Key Algorithm"`.
 
 - **Browser says "certificate not trusted"** — that's expected for self-signed certificates.
   Either click through the warning, add the cert to the user root store (see above), or use
@@ -786,6 +1003,14 @@ net::awaitable<void> fetch_secure() {
 
 - **`WSAECONNRESET` / `WSAECONNABORTED` in logs** — these are normal client disconnect events,
   not errors. Brazier logs them at `DEBUG` level.
+
+- **`TLS shutdown error` on every connection** — this is `APPLICATION_DATA_AFTER_CLOSE_NOTIFY`,
+  a benign artefact of clients that send data after the shutdown alert. It's logged at
+  `DEBUG` and can be ignored.
+
+- **Hot-reload says `reloadTls: source is PEM, nothing to reload`** — you supplied the
+  certificate only as `cert_pem` / `key_pem`, with no `cert_file` / `key_file`. Set the file
+  paths too, or call `reloadTls(new_tls)` with fresh PEM strings from your secret source.
 
 ## Brazier WebSocket Routing System
 

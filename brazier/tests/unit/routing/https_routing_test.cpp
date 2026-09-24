@@ -61,7 +61,7 @@ namespace {
 
     constexpr int kRouteRegistrationDelayMs = 200;
 
-} 
+}
 
 class TestController : public brazier::Controller {
 public:

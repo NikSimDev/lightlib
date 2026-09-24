@@ -37,16 +37,19 @@
 
 #include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/pem.h>
 
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
+#include <optional>
 
 #include "TLS/TicketKeyStore.hpp"
 #include "vendor/Handlers/ENV.hpp"
@@ -74,6 +77,8 @@ namespace brazier {
             std::string cert_file;
             std::string key_file;
             std::string ca_file;
+            std::string cert_pem;   
+            std::string key_pem;
 
             std::vector<std::pair<std::string, std::string>> conf;
 
@@ -95,7 +100,8 @@ namespace brazier {
         std::vector<std::unique_ptr<
         net::executor_work_guard<net::io_context::executor_type>>> work_guards_;
 
-        ssl::context ssl_ctx_{ ssl::context::tls_server };
+        std::shared_ptr<ssl::context> ssl_ctx_;
+        std::shared_mutex ssl_ctx_mutex_;
 
         std::thread       stats_thread_;
         std::atomic<bool> shutdown_flag_{ false };
@@ -135,6 +141,9 @@ namespace brazier {
 
         void setTlsConfig(const TlsConfig& tls);
 
+        bool reloadTls();
+        bool reloadTls(const TlsConfig& new_tls);
+
         bool initialize();
 
         void run();
@@ -154,8 +163,14 @@ namespace brazier {
         void load_tls_config_from_global();
         void load_limits_from_config();
 
-        void configure_tls();
-        void apply_ssl_conf();
+        void configure_tls();      
+        void configure_ssl_ctx(ssl::context& ctx);  
+        void apply_ssl_conf(ssl::context& ctx);     
+        void load_cert_from_memory(ssl::context& ctx,
+                                    const std::string& cert_pem,
+                                    const std::string& key_pem);  
+
+        std::shared_ptr<ssl::context> get_ssl_ctx();
 
         void release_connection();
 

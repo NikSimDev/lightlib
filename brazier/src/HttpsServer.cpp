@@ -77,6 +77,11 @@ void brazier::HttpsServer::load_common_config_from_global() {
 void brazier::HttpsServer::load_tls_config_from_global() {
     if (tls_config_from_user_) return;
 
+    tls_.cert_pem = global_config->get("https_server.tls.cert_pem",
+        std::string(""));
+    tls_.key_pem = global_config->get("https_server.tls.key_pem",
+        std::string(""));
+
     tls_.cert_file = global_config->get("https_server.tls.cert_file",
         std::string("server.crt"));
     tls_.key_file = global_config->get("https_server.tls.key_file",
@@ -110,6 +115,182 @@ void brazier::HttpsServer::load_tls_config_from_global() {
     catch (const std::exception& e) {
         Logger::log("https_server.tls.conf not loaded: " + std::string(e.what()),
             "WARNING");
+    }
+}
+
+void brazier::HttpsServer::load_cert_from_memory(
+    ssl::context& ctx,
+    const std::string& cert_pem, const std::string& key_pem)
+{
+    if (cert_pem.empty() || key_pem.empty()) {
+        throw std::runtime_error("load_cert_from_memory: empty PEM");
+    }
+
+    BIO* cert_bio = BIO_new_mem_buf(cert_pem.data(),
+        static_cast<int>(cert_pem.size()));
+    if (!cert_bio) {
+        throw std::runtime_error("BIO_new_mem_buf (cert) failed");
+    }
+
+    X509* leaf = PEM_read_bio_X509(cert_bio, nullptr, nullptr, nullptr);
+    if (!leaf) {
+        BIO_free(cert_bio);
+        throw std::runtime_error("PEM_read_bio_X509 failed: " +
+            std::string(ERR_error_string(ERR_get_error(), nullptr)));
+    }
+
+    if (SSL_CTX_use_certificate(ctx.native_handle(), leaf) != 1) {
+        X509_free(leaf);
+        BIO_free(cert_bio);
+        throw std::runtime_error("SSL_CTX_use_certificate failed");
+    }
+    X509_free(leaf);
+
+    X509* chain_cert = nullptr;
+    while ((chain_cert = PEM_read_bio_X509(cert_bio, nullptr,
+        nullptr, nullptr)) != nullptr) {
+        if (SSL_CTX_add_extra_chain_cert(ctx.native_handle(), chain_cert) != 1) {
+            X509_free(chain_cert);
+            BIO_free(cert_bio);
+            throw std::runtime_error("SSL_CTX_add_extra_chain_cert failed");
+        }
+    }
+    BIO_free(cert_bio);
+
+    BIO* key_bio = BIO_new_mem_buf(key_pem.data(),
+        static_cast<int>(key_pem.size()));
+    if (!key_bio) {
+        throw std::runtime_error("BIO_new_mem_buf (key) failed");
+    }
+
+    EVP_PKEY* pkey = PEM_read_bio_PrivateKey(key_bio, nullptr, nullptr, nullptr);
+    BIO_free(key_bio);
+
+    if (!pkey) {
+        throw std::runtime_error("PEM_read_bio_PrivateKey failed: " +
+            std::string(ERR_error_string(ERR_get_error(), nullptr)));
+    }
+
+    if (SSL_CTX_use_PrivateKey(ctx.native_handle(), pkey) != 1) {
+        EVP_PKEY_free(pkey);
+        throw std::runtime_error("SSL_CTX_use_PrivateKey failed");
+    }
+    EVP_PKEY_free(pkey);
+
+    if (SSL_CTX_check_private_key(ctx.native_handle()) != 1) {
+        throw std::runtime_error("Certificate and private key do not match");
+    }
+
+    Logger::log("TLS certificate loaded from PEM (in-memory, with chain)",
+        "INFO");
+}
+
+void brazier::HttpsServer::configure_ssl_ctx(ssl::context& ctx) {
+    ctx.set_options(
+        ssl::context::default_workarounds
+        | ssl::context::no_sslv2
+        | ssl::context::no_sslv3
+        | ssl::context::no_tlsv1
+        | ssl::context::no_tlsv1_1
+        | ssl::context::single_dh_use);
+
+    SSL_CTX_set_options(ctx.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
+
+    SSL_CTX_set_session_cache_mode(
+        ctx.native_handle(),
+        SSL_SESS_CACHE_OFF);
+
+    ticket_store_.ensure_initialized();
+    ticket_store_.attach_to(ctx.native_handle());
+
+    apply_ssl_conf(ctx);
+
+    if (!tls_.cert_pem.empty() && !tls_.key_pem.empty()) {
+        load_cert_from_memory(ctx, tls_.cert_pem, tls_.key_pem);
+    }
+    else {
+        ctx.use_certificate_chain_file(tls_.cert_file);
+        ctx.use_private_key_file(tls_.key_file, ssl::context::pem);
+
+        if (SSL_CTX_check_private_key(ctx.native_handle()) != 1) {
+            throw std::runtime_error(
+                "Certificate/private key mismatch: " +
+                tls_.cert_file + " / " + tls_.key_file);
+        }
+    }
+
+    if (tls_.require_client_cert || tls_.verify_client_cert) {
+        if (!tls_.ca_file.empty()) {
+            ctx.load_verify_file(tls_.ca_file);
+        }
+        auto mode = ssl::verify_peer;
+        if (tls_.require_client_cert) {
+            mode |= ssl::verify_fail_if_no_peer_cert;
+        }
+        ctx.set_verify_mode(mode);
+    }
+    else {
+        ctx.set_verify_mode(ssl::verify_none);
+    }
+}
+
+std::shared_ptr<ssl::context> brazier::HttpsServer::get_ssl_ctx() {
+    std::shared_lock lock(ssl_ctx_mutex_);
+    return ssl_ctx_;
+}
+
+bool brazier::HttpsServer::reloadTls() {
+    if (!tls_.cert_file.empty() && !tls_.key_file.empty()) {
+        std::ifstream cf(tls_.cert_file, std::ios::binary);
+        std::ifstream kf(tls_.key_file, std::ios::binary);
+
+        if (!cf || !kf) {
+            Logger::log("reloadTls: cannot open files: " +
+                tls_.cert_file + " / " + tls_.key_file, "ERROR");
+            return false;
+        }
+
+        TlsConfig new_tls = tls_;
+        new_tls.cert_pem = std::string(
+            std::istreambuf_iterator<char>(cf), {});
+        new_tls.key_pem = std::string(
+            std::istreambuf_iterator<char>(kf), {});
+
+        return reloadTls(new_tls);
+    }
+
+    Logger::log("reloadTls: no file paths configured, "
+        "use reloadTls(new_tls) with fresh PEM", "WARNING");
+    return false;
+}
+
+bool brazier::HttpsServer::reloadTls(const TlsConfig& new_tls) {
+    try {
+        auto new_ctx = std::make_shared<ssl::context>(ssl::context::tls_server);
+
+        TlsConfig saved = tls_;
+        tls_ = new_tls;
+
+        try {
+            configure_ssl_ctx(*new_ctx);
+        }
+        catch (...) {
+            tls_ = saved;
+            throw;
+        }
+
+        {
+            std::unique_lock lock(ssl_ctx_mutex_);
+            ssl_ctx_ = new_ctx;
+        }
+
+        Logger::log("TLS reloaded successfully (new SSL_CTX active)", "SUCCESS");
+        return true;
+    }
+    catch (const std::exception& e) {
+        Logger::log("TLS reload failed: " + std::string(e.what()) +
+            " (keeping old SSL_CTX)", "ERROR");
+        return false;
     }
 }
 
@@ -164,7 +345,7 @@ void brazier::HttpsServer::load_limits_from_config() {
         testing_mode ? "WARNING" : "INFO");
 }
 
-void brazier::HttpsServer::apply_ssl_conf() {
+void brazier::HttpsServer::apply_ssl_conf(ssl::context& ctx) {
     if (tls_.conf.empty()) return;
 
     SSL_CONF_CTX* cctx = SSL_CONF_CTX_new();
@@ -173,7 +354,7 @@ void brazier::HttpsServer::apply_ssl_conf() {
     }
 
     SSL_CONF_CTX_set_flags(cctx, SSL_CONF_FLAG_SERVER | SSL_CONF_FLAG_CERTIFICATE);
-    SSL_CONF_CTX_set_ssl_ctx(cctx, ssl_ctx_.native_handle());
+    SSL_CONF_CTX_set_ssl_ctx(cctx, ctx.native_handle());
 
     for (const auto& [cmd, val] : tls_.conf) {
         int rv = val.empty()
@@ -197,41 +378,10 @@ void brazier::HttpsServer::apply_ssl_conf() {
 }
 
 void brazier::HttpsServer::configure_tls() {
-    ssl_ctx_.set_options(
-        ssl::context::default_workarounds
-        | ssl::context::no_sslv2
-        | ssl::context::no_sslv3
-        | ssl::context::no_tlsv1
-        | ssl::context::no_tlsv1_1
-        | ssl::context::single_dh_use);
-
-    SSL_CTX_set_options(ssl_ctx_.native_handle(), SSL_OP_IGNORE_UNEXPECTED_EOF);
-
-    SSL_CTX_set_session_cache_mode(
-        ssl_ctx_.native_handle(),
-        SSL_SESS_CACHE_OFF);
-
-    ticket_store_.ensure_initialized();
-    ticket_store_.attach_to(ssl_ctx_.native_handle());
-
-    apply_ssl_conf();
-
-    ssl_ctx_.use_certificate_chain_file(tls_.cert_file);
-    ssl_ctx_.use_private_key_file(tls_.key_file, ssl::context::pem);
-
-    if (tls_.require_client_cert || tls_.verify_client_cert) {
-        if (!tls_.ca_file.empty()) {
-            ssl_ctx_.load_verify_file(tls_.ca_file);
-        }
-        auto mode = ssl::verify_peer;
-        if (tls_.require_client_cert) {
-            mode |= ssl::verify_fail_if_no_peer_cert;
-        }
-        ssl_ctx_.set_verify_mode(mode);
+    if (!ssl_ctx_) {
+        throw std::runtime_error("configure_tls: ssl_ctx_ not initialized");
     }
-    else {
-        ssl_ctx_.set_verify_mode(ssl::verify_none);
-    }
+    configure_ssl_ctx(*ssl_ctx_);
 }
 
 bool brazier::HttpsServer::initialize() {
@@ -260,6 +410,8 @@ bool brazier::HttpsServer::initialize() {
         load_common_config_from_global();
         load_tls_config_from_global();
         load_limits_from_config();
+
+        ssl_ctx_ = std::make_shared<ssl::context>(ssl::context::tls_server);
         configure_tls();
 
         const tcp::endpoint endpoint(net::ip::make_address(host_), port_);
@@ -562,7 +714,8 @@ net::awaitable<void> brazier::HttpsServer::handle_connection(tcp::socket socket)
         socket.set_option(tcp::no_delay(true));
         socket.set_option(boost::asio::socket_base::keep_alive(true));
 
-        ssl::stream<tcp::socket> stream(std::move(socket), ssl_ctx_);
+        auto ctx = get_ssl_ctx();
+        ssl::stream<tcp::socket> stream(std::move(socket), *ctx);
 
         {
             net::steady_timer hs_timer(co_await net::this_coro::executor);

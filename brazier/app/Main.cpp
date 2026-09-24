@@ -41,9 +41,24 @@ int main() {
         brazier::Logger::log("HTTPS server: " + https_server_host + ":" +
             std::to_string(https_server_port), "INFO");
 
-        brazier::HttpsServer https_server(https_server_host, https_server_port);
+        brazier::HttpsServer::TlsConfig tls;
+        tls.cert_file = "app/certs/server.crt";
+        tls.key_file = "app/certs/server.key";
+        brazier::HttpsServer https_server(https_server_host, https_server_port, tls);
 
         if (!https_server.initialize()) return 1;
+        std::thread([&https_server] {
+            std::string line;
+            while (std::getline(std::cin, line)) {
+                if (line == "reload") {
+                    https_server.reloadTls();
+                }
+                else if (line == "quit") {
+                    https_server.stop();
+                    break;
+                }
+            }
+            }).detach();
         https_server.run(); 
 
         return 0;

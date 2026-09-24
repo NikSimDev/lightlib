@@ -99,7 +99,7 @@ jobs:
         cp config_test.json ${{ matrix.build_type }}/
       shell: bash
 
-    - name: Generate self-signed certificate
+    - name: Generate self-signed certificate (main server)
       run: |
         mkdir -p build/brazier/app/certs
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
@@ -107,6 +107,34 @@ jobs:
           -out build/brazier/app/certs/server.crt \
           -subj "/CN=localhost" \
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+      shell: bash
+
+    - name: Generate mTLS certificates (CA + client)
+      run: |
+        set -e
+        mkdir -p build/certs
+        cd build/certs
+
+        openssl genrsa -out ca.key 4096
+        openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 \
+          -out ca.crt -subj "/CN=Test CA"
+
+        openssl genrsa -out server.key 2048
+        openssl req -new -key server.key -out server.csr -subj "/CN=localhost"
+        echo "subjectAltName=DNS:localhost,IP:127.0.0.1" > server_ext.cnf
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+          -CAcreateserial -out server.crt -days 365 -sha256 \
+          -extfile server_ext.cnf
+
+        openssl genrsa -out client.key 2048
+        openssl req -new -key client.key -out client.csr -subj "/CN=brazier-client"
+        echo "extendedKeyUsage=clientAuth" > client_ext.cnf
+        openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key \
+          -CAserial ca.srl -out client.crt -days 365 -sha256 \
+          -extfile client_ext.cnf
+
+        openssl verify -CAfile ca.crt server.crt
+        openssl verify -CAfile ca.crt client.crt
       shell: bash
 
     - name: Run tests
@@ -195,7 +223,7 @@ jobs:
         cp config_test.json ${{ matrix.build_type }}/
       shell: bash
 
-    - name: Generate self-signed certificate (Windows)
+        - name: Generate self-signed certificate (main server)
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path "build/brazier/app/certs" | Out-Null
@@ -204,6 +232,30 @@ jobs:
           -out "build/brazier/app/certs/server.crt" `
           -subj "/CN=localhost" `
           -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+
+    - name: Generate mTLS certificates (CA + client)
+      shell: pwsh
+      run: |
+        New-Item -ItemType Directory -Force -Path "build/certs" | Out-Null
+        Push-Location build/certs
+
+        openssl genrsa -out ca.key 4096
+        openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 -out ca.crt -subj "/CN=Test CA"
+
+        openssl genrsa -out server.key 2048
+        openssl req -new -key server.key -out server.csr -subj "/CN=localhost"
+        Set-Content -Path server_ext.cnf -Value "subjectAltName=DNS:localhost,IP:127.0.0.1"
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt -days 365 -sha256 -extfile server_ext.cnf
+
+        openssl genrsa -out client.key 2048
+        openssl req -new -key client.key -out client.csr -subj "/CN=brazier-client"
+        Set-Content -Path client_ext.cnf -Value "extendedKeyUsage=clientAuth"
+        openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key -CAserial ca.srl -out client.crt -days 365 -sha256 -extfile client_ext.cnf
+
+        openssl verify -CAfile ca.crt server.crt
+        openssl verify -CAfile ca.crt client.crt
+
+        Pop-Location
 
     - name: Run tests
       working-directory: build
@@ -283,14 +335,44 @@ jobs:
         cp config_test.json ${{ matrix.build_type }}/
       shell: bash
 
-    - name: Generate self-signed certificate
+        - name: Generate self-signed certificate (main server)
       run: |
         mkdir -p build/brazier/app/certs
+        cd build/brazier/app/certs
+        echo "subjectAltName=DNS:localhost,IP:127.0.0.1" > server_ext.cnf
         openssl req -x509 -newkey rsa:4096 -sha256 -days 365 -nodes \
-          -keyout build/brazier/app/certs/server.key \
-          -out build/brazier/app/certs/server.crt \
+          -keyout server.key -out server.crt \
           -subj "/CN=localhost" \
-          -addext "subjectAltName=DNS:localhost,IP:127.0.0.1"
+          -extensions v3_req \
+          -config <(cat /etc/ssl/openssl.cnf; echo "[v3_req]"; echo "subjectAltName=DNS:localhost,IP:127.0.0.1")
+      shell: bash
+
+    - name: Generate mTLS certificates (CA + client)
+      run: |
+        set -e
+        mkdir -p build/certs
+        cd build/certs
+
+        openssl genrsa -out ca.key 4096
+        openssl req -x509 -new -nodes -key ca.key -sha256 -days 1825 \
+          -out ca.crt -subj "/CN=Test CA"
+
+        openssl genrsa -out server.key 2048
+        openssl req -new -key server.key -out server.csr -subj "/CN=localhost"
+        echo "subjectAltName=DNS:localhost,IP:127.0.0.1" > server_ext.cnf
+        openssl x509 -req -in server.csr -CA ca.crt -CAkey ca.key \
+          -CAcreateserial -out server.crt -days 365 -sha256 \
+          -extfile server_ext.cnf
+
+        openssl genrsa -out client.key 2048
+        openssl req -new -key client.key -out client.csr -subj "/CN=brazier-client"
+        echo "extendedKeyUsage=clientAuth" > client_ext.cnf
+        openssl x509 -req -in client.csr -CA ca.crt -CAkey ca.key \
+          -CAserial ca.srl -out client.crt -days 365 -sha256 \
+          -extfile client_ext.cnf
+
+        openssl verify -CAfile ca.crt server.crt
+        openssl verify -CAfile ca.crt client.crt
       shell: bash
 
     - name: Run tests
