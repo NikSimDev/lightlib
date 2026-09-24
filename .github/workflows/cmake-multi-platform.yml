@@ -223,7 +223,7 @@ jobs:
         cp config_test.json ${{ matrix.build_type }}/
       shell: bash
 
-        - name: Generate self-signed certificate (main server)
+    - name: Generate self-signed certificate (main server)
       shell: pwsh
       run: |
         New-Item -ItemType Directory -Force -Path "build/brazier/app/certs" | Out-Null
@@ -335,7 +335,7 @@ jobs:
         cp config_test.json ${{ matrix.build_type }}/
       shell: bash
 
-        - name: Generate self-signed certificate (main server)
+    - name: Generate self-signed certificate (main server)
       run: |
         mkdir -p build/brazier/app/certs
         cd build/brazier/app/certs
