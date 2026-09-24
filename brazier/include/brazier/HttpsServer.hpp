@@ -44,18 +44,17 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
 #include <string>
 #include <thread>
 #include <utility>
 #include <vector>
-#include <optional>
 
 #include "Platform/SocketOptions.hpp"
 #include "Platform/SystemInfo.hpp"
 
 #include "TLS/TicketKeyStore.hpp"
-#include "vendor/Handlers/ENV.hpp"
 #include "Database/Queue.hpp"
 #include "Database/Cache.hpp"
 #include "Database/Migrations/MigrationManager.hpp"
@@ -188,7 +187,8 @@ namespace brazier {
 
         net::awaitable<void> handle_connection(tcp::socket socket);
         net::awaitable<void> accept_loop(tcp::acceptor& acceptor);
-        net::awaitable<void> accept_and_dispatch(tcp::acceptor& acceptor, int worker_begin);
+        net::awaitable<void> accept_and_dispatch(tcp::acceptor& acceptor,
+            int worker_begin);
     };
 
 }
